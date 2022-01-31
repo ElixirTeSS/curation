@@ -2,6 +2,8 @@ package yanan.zhang;
 
 import lombok.Data;
 
+import java.util.List;
+
 /**
  * @author Yanan Zhang
  **/
@@ -36,4 +38,12 @@ public class SingleUrlResult {
      * the http status of the target link
      */
     private int detailTargetStatus;
+    /**
+     * categories: events, materials, elearning
+     */
+    private String category;
+    /**
+     * minor
+     */
+    private List<SingleUrlResult> minorList;
 }
