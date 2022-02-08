@@ -13,14 +13,12 @@ public enum CategoryEnum {
      */
     EVENTS("Events"),
     MATERIALS("Materials"),
-    E_LEARNING("e_Learning"),
-    WORKFLOWS("workflows"),
-    PROVIDERS("Providers");
+    E_LEARNING("E_Learning"),
+    WORKFLOWS("Workflows");
 
     private final String name;
 
     CategoryEnum(String name){
         this.name = name;
     }
-
 }

@@ -74,7 +74,8 @@ public class HttpUtils {
 
         } catch (Exception e) {
             result.setSuccess(false);
-            logger.error("httpInvoke!url={}", url, e);
+//            logger.error("httpInvoke!url={}", url, e);
+            logger.error("httpInvoke!url={}", url);
         } finally {
             if (httpResponse != null) {
                 try {

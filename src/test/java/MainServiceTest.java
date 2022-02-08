@@ -14,7 +14,8 @@ public class MainServiceTest {
     @Test
     public void testGetFromList() {
 
-        List<SingleUrlResult> list = mainService.getFromList(1);
+//		List<SingleUrlResult> list = mainService.getEventsList(1);
+        List<SingleUrlResult> list = mainService.getWorkflowsList();
         System.out.println(list==null);
 
         if (list!=null) {
@@ -28,12 +29,12 @@ public class MainServiceTest {
     @Test
     public void testRefillDetail() {
 
-        List<SingleUrlResult> list = mainService.getFromList(1);
+        List<SingleUrlResult> list = mainService.getEventsList(1);
 
         SingleUrlResult result = list.get(0);
 
         System.out.println(result);
-        mainService.refillDetail(result);
+        mainService.refillDetail(result, MainService.CSS_QUERY_EVENTS);
         System.out.println(result);
 
     }
