@@ -55,10 +55,11 @@ public class MainServiceTest {
         index = 1;
 
         for (SingleUrlResult result : list) {
-            if (result.getDetailTargetStatus() != 200) {
+            if (result.getDetailTargetStatus() != 200 && result.getDetailTargetStatus() != 300) {
                 System.out.println((index++) + "," + result);
             }
         }
+        System.out.println("list.size====" + list.size());
     }
 
     @Test
@@ -77,9 +78,10 @@ public class MainServiceTest {
         index = 1;
 
         for (SingleUrlResult result : list) {
-            if (result.getDetailTargetStatus() != 200) {
+            if (result.getDetailTargetStatus() != 200 && result.getDetailTargetStatus() != 300) {
                 System.out.println((index++) + "," + result);
             }
         }
+        System.out.println("list.size====" + list.size());
     }
 }

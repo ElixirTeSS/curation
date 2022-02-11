@@ -10,7 +10,7 @@ public class HttpUtilsTest {
     @Test
     public void testGetSingleHttp() {
 
-        String url = "https://tess.elixir-europe.org/events?page=1";
+        String url = "http://www.genomicsnetwork.ac.uk/forum/events/conferences/title\\,26253\\,en.html";
 
         HttpResult result = HttpUtils.getSingleHttp(url);
 

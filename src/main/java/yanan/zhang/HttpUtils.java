@@ -46,18 +46,17 @@ public class HttpUtils {
         return result;
     }
 
+
     public static HttpResult getSingleHttp(String url) {
 
         HttpResult result = new HttpResult();
 
         CloseableHttpClient httpClient = HttpClients.createDefault();
-
-        HttpGet httpGet = new HttpGet(url);
-        httpGet.setConfig(CONFIG);
-
         CloseableHttpResponse httpResponse = null;
 
         try {
+            HttpGet httpGet = new HttpGet(url);
+            httpGet.setConfig(CONFIG);
             //use httpGet and return a response
             httpResponse = httpClient.execute(httpGet);
 
@@ -72,6 +71,9 @@ public class HttpUtils {
                 result.setSuccess(false);
             }
 
+        } catch (IllegalArgumentException e) {
+            result.setSuccess(false);
+            logger.error("Url is illegal!url={}", url);
         } catch (Exception e) {
             result.setSuccess(false);
 //            logger.error("httpInvoke!url={}", url, e);
@@ -95,5 +97,4 @@ public class HttpUtils {
 
         return result;
     }
-
 }
