@@ -1,5 +1,6 @@
 package yanan.zhang;
 
+import java.text.DecimalFormat;
 import java.util.*;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
@@ -51,7 +52,14 @@ public class MainService {
     public List<SingleUrlResult> execute() {
         List<SingleUrlResult> resultList = new ArrayList<>();
         List<SingleUrlResult> totalPageList = this.crawlData();
-        for (SingleUrlResult obj : totalPageList) {
+        //四舍五入保留两位小数
+        DecimalFormat df = new DecimalFormat("#.00");
+        for (int i = 0; i < totalPageList.size(); i++) {
+            SingleUrlResult obj = totalPageList.get(i);
+            if ((i + 1) % 50 == 0) {
+                String progress = df.format(Double.parseDouble(i + "") / Double.parseDouble(totalPageList.size() + "") * 100.0);
+                logger.info("******************** Progress {}%. ********************", progress);
+            }
             if (obj.getCategory().equals(CategoryEnum.EVENTS.getName())) {
                 refillDetail(obj, CSS_QUERY_EVENTS);
             } else if (obj.getCategory().equals(CategoryEnum.MATERIALS.getName()) || obj.getCategory().equals(CategoryEnum.E_LEARNING.getName())) {
@@ -68,6 +76,7 @@ public class MainService {
 
         return resultList;
     }
+
 
 //    public List<SingleUrlResult> execute() {
 //
@@ -239,6 +248,7 @@ public class MainService {
         minor.setCreateTime(new Date());
         return minor;
     }
+
 
     /**
      * crawl all data
@@ -507,5 +517,4 @@ public class MainService {
     }
 
 }
-
 
