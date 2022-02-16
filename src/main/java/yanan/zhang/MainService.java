@@ -1,13 +1,18 @@
 package yanan.zhang;
 
 import java.text.DecimalFormat;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
@@ -32,7 +37,8 @@ public class MainService {
     private static final int PROCESSED_PER_THREAD = 200;
     public static final String CSS_QUERY_EVENTS = "div.page-header > p > a";
     public static final String CSS_QUERY_MATERIALS_AND_E_LEARNING = "div.text-justify a";
-    public static final String CSS_QUERY_WORKFLOWS = "div#workflow-diagram-sidebar a";    /**
+    public static final String CSS_QUERY_WORKFLOWS = "div#workflow-diagram-sidebar a";
+    /**
      * 正则表达式：过滤主域名
      *
      * https://tool.chinaz.com/tools/regexgenerate
@@ -41,7 +47,8 @@ public class MainService {
     /**
      * 记录主域名是死链的缓存
      */
-    public static Map<String, Integer> MAIN_URL_DEAD_MAP = new HashMap<>();
+    public static Map<String, CacheInfo> MAIN_URL_DEAD_MAP = new HashMap<>();
+
 
 
     /**
@@ -73,6 +80,12 @@ public class MainService {
         jdbc.dropTable();
         jdbc.createTable();
         this.saveDeadLink2DB(jdbc, resultList);
+        //保存主域名死链数据
+        if (MAIN_URL_DEAD_MAP.size() > 0) {
+            jdbc.dropTableDomain();
+            jdbc.createTableDomain();
+            this.saveDeadLinkDomain2DB(jdbc, new ArrayList<>(MAIN_URL_DEAD_MAP.values()));
+        }
 
         return resultList;
     }
@@ -210,7 +223,7 @@ public class MainService {
     }
 
     /**
-     * store the dead links into database
+     * 把死链数据存库
      *
      * @param jdbc
      * @param singleUrlResults
@@ -218,11 +231,11 @@ public class MainService {
     private void saveDeadLink2DB(MySqlJDBCImpl jdbc, List<SingleUrlResult> singleUrlResults) {
         if (singleUrlResults != null && singleUrlResults.size() > 0) {
             for (SingleUrlResult major : singleUrlResults) {
-                if (major.getDetailTargetStatus() != 200 && major.getDetailTargetStatus() != 300 && major.getDetailTargetUrl() != null) {
+                if (major.getDetailTargetStatus() != 200 && major.getDetailTargetUrl() != null) {
                     jdbc.saveDeadLinkRecord(this.buildDeadLinkRecords(major));
                     if (major.getMinorList() != null && major.getMinorList().size() > 0) {
                         for (SingleUrlResult minor : major.getMinorList()) {
-                            if (minor.getDetailTargetStatus() != 200 && minor.getDetailTargetStatus() != 300 && minor.getDetailTargetUrl() != null) {
+                            if (minor.getDetailTargetStatus() != 200 && minor.getDetailTargetUrl() != null) {
                                 jdbc.saveDeadLinkRecord(this.buildDeadLinkRecords(minor));
                             }
                         }
@@ -233,20 +246,53 @@ public class MainService {
     }
 
     /**
-     * build DeadLinkRecords
+     * 把主域名死链数据存库
+     *
+     * @param jdbc
+     * @param infoList
+     */
+    private void saveDeadLinkDomain2DB(MySqlJDBCImpl jdbc, List<CacheInfo> infoList) {
+        if (infoList != null && infoList.size() > 0) {
+            for (CacheInfo obj : infoList) {
+                jdbc.saveDeadLinkDomain(this.buildDeadLinkDomain(jdbc, obj));
+            }
+        }
+    }
+
+    /**
+     * 组装DeadLinkRecords
      *
      * @param result
      * @return
      */
     private DeadLinkRecords buildDeadLinkRecords(SingleUrlResult result) {
-        DeadLinkRecords minor = new DeadLinkRecords();
-        minor.setDeadLink(result.getDetailTargetUrl());
-        minor.setStatusCode(result.getDetailTargetStatus());
-        minor.setPage(result.getListIndex());
-        minor.setParentUrl(result.getDetailUrl());
-        minor.setCategory(result.getCategory());
-        minor.setCreateTime(new Date());
-        return minor;
+        DeadLinkRecords model = new DeadLinkRecords();
+        model.setDeadLink(result.getDetailTargetUrl());
+        model.setStatusCode(result.getDetailTargetStatus());
+        model.setReasonPhrase(result.getDetailTargetReasonPhrase());
+        model.setPage(result.getListIndex());
+        model.setParentUrl(result.getDetailUrl());
+        model.setCategory(result.getCategory());
+        model.setDomainUrl(this.getMainUrl(model.getDeadLink()));
+        model.setCreateTime(new Date());
+        return model;
+    }
+
+    /**
+     * 组装DeadLinkDomain
+     *
+     * @param jdbc
+     * @param cache
+     * @return
+     */
+    private DeadLinkDomain buildDeadLinkDomain(MySqlJDBCImpl jdbc, CacheInfo cache) {
+        DeadLinkDomain model = new DeadLinkDomain();
+        model.setDomainUrl(cache.getUrl());
+        model.setStatusCode(cache.getHttpStatus());
+        model.setReasonPhrase(cache.getReasonPhrase());
+        model.setLinkNumber(jdbc.countDeadLinkRecordsByDomain(cache.getUrl()));
+        model.setCreateTime(new Date());
+        return model;
     }
 
 
@@ -378,23 +424,25 @@ public class MainService {
                     String majorUrl = singleUrlResult.getDetailTargetUrl();
                     //获取目标url的主域名
                     String mainUrl = this.getMainUrl(majorUrl);
-                    Integer mainUrlStatusCode = MAIN_URL_DEAD_MAP.get(mainUrl);
-                    if (mainUrlStatusCode == null) {
+                    CacheInfo mainUrlCache = MAIN_URL_DEAD_MAP.get(mainUrl);
+                    if (mainUrlCache == null) {
                         //主域名没在缓存map中就正常请求获取结果
                         HttpResult majorUrlHttpResult = HttpUtils.getSingleHttpWithRetry(majorUrl, 3);
                         singleUrlResult.setDetailTargetStatus(majorUrlHttpResult.getHttpStatus());
+                        singleUrlResult.setDetailTargetReasonPhrase(majorUrlHttpResult.getReasonPhrase());
                         //如果请求不成功，则单独请求主域名
-                        if (mainUrl != null && majorUrlHttpResult.getHttpStatus() != 200 && majorUrlHttpResult.getHttpStatus() != 300) {
+                        if (mainUrl != null && majorUrlHttpResult.getHttpStatus() != 200) {
                             HttpResult mainUrlResult = HttpUtils.getSingleHttpWithRetry(mainUrl, 3);
-                            if (mainUrlResult.getHttpStatus() != 200 && mainUrlResult.getHttpStatus() != 300) {
+                            if (mainUrlResult.getHttpStatus() != 200) {
                                 //如果主域名都访问不成功，而且主域名在MAIN_URL_DEAD_MAP中不存在就放进去
-                                MAIN_URL_DEAD_MAP.computeIfAbsent(mainUrl, k -> mainUrlResult.getHttpStatus());
+                                MAIN_URL_DEAD_MAP.computeIfAbsent(mainUrl, k -> new CacheInfo(mainUrl, mainUrlResult.getHttpStatus(), mainUrlResult.getReasonPhrase()));
                                 logger.info("缓存MAIN_URL_DEAD_MAP={}", MAIN_URL_DEAD_MAP);
                             }
                         }
                     } else {
                         //主域名在缓存map中就把主域名的statusCode放进去
-                        singleUrlResult.setDetailTargetStatus(mainUrlStatusCode);
+                        singleUrlResult.setDetailTargetStatus(mainUrlCache.getHttpStatus());
+                        singleUrlResult.setDetailTargetReasonPhrase(mainUrlCache.getReasonPhrase());
                     }
                 } else {
                     //其余都是minor
@@ -409,22 +457,23 @@ public class MainService {
                     String minorUrl = minor.getDetailTargetUrl();
                     //获取目标url的主域名
                     String mainUrl = this.getMainUrl(minorUrl);
-                    Integer mainUrlStatusCode = MAIN_URL_DEAD_MAP.get(mainUrl);
-                    if (mainUrlStatusCode == null) {
+                    CacheInfo mainUrlCache = MAIN_URL_DEAD_MAP.get(mainUrl);
+                    if (mainUrlCache == null) {
                         //主域名没在缓存map中就正常请求获取结果
                         HttpResult minorUrlHttpResult = HttpUtils.getSingleHttpWithRetry(minorUrl, 3);
                         minor.setDetailTargetStatus(minorUrlHttpResult.getHttpStatus());
                         //如果请求不成功，则单独请求主域名
-                        if (mainUrl != null && minorUrlHttpResult.getHttpStatus() != 200 && minorUrlHttpResult.getHttpStatus() != 300) {
+                        if (mainUrl != null && minorUrlHttpResult.getHttpStatus() != 200) {
                             HttpResult mainUrlResult = HttpUtils.getSingleHttpWithRetry(mainUrl, 3);
-                            if (mainUrlResult.getHttpStatus() != 200 && mainUrlResult.getHttpStatus() != 300) {
+                            if (mainUrlResult.getHttpStatus() != 200) {
                                 //如果主域名都访问不成功，而且主域名在MAIN_URL_DEAD_MAP中不存在就放进去
-                                MAIN_URL_DEAD_MAP.computeIfAbsent(mainUrl, k -> mainUrlResult.getHttpStatus());
+                                MAIN_URL_DEAD_MAP.computeIfAbsent(mainUrl, k -> new CacheInfo(mainUrl, mainUrlResult.getHttpStatus(), mainUrlResult.getReasonPhrase()));
                             }
                         }
                     } else {
                         //主域名在缓存map中就把主域名的statusCode放进去
-                        minor.setDetailTargetStatus(mainUrlStatusCode);
+                        minor.setDetailTargetStatus(mainUrlCache.getHttpStatus());
+                        minor.setDetailTargetReasonPhrase(mainUrlCache.getReasonPhrase());
                     }
                     minorList.add(minor);
                 }
@@ -434,6 +483,7 @@ public class MainService {
             singleUrlResult.setMinorList(minorList);
         }
     }
+
 
     /**
      * 获取主域名

@@ -1,13 +1,17 @@
 package yanan.zhang;
 
 import lombok.Data;
+import lombok.ToString;
 
 import java.util.List;
 
+
 /**
+ * save single result
  * @author Yanan Zhang
  **/
 @Data
+@ToString
 public class SingleUrlResult {
 
     /**
@@ -38,6 +42,10 @@ public class SingleUrlResult {
      * the http status of the target link
      */
     private int detailTargetStatus;
+    /**
+     * httpReasonPhrase of the target link
+     */
+    private String detailTargetReasonPhrase;
     /**
      * categories: events, materials, elearning
      */

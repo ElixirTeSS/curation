@@ -1,5 +1,7 @@
 package yanan.zhang;
 
+import java.io.IOException;
+
 import org.apache.http.client.config.RequestConfig;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpGet;
@@ -8,8 +10,6 @@ import org.apache.http.impl.client.HttpClients;
 import org.apache.http.util.EntityUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import java.io.IOException;
 
 /**
  * @author Yanan Zhang
@@ -46,7 +46,6 @@ public class HttpUtils {
         return result;
     }
 
-
     public static HttpResult getSingleHttp(String url) {
 
         HttpResult result = new HttpResult();
@@ -63,6 +62,7 @@ public class HttpUtils {
             logger.info("httpStatus={},url={}", httpResponse.getStatusLine(), url);
 
             result.setHttpStatus(httpResponse.getStatusLine().getStatusCode());
+            result.setReasonPhrase(httpResponse.getStatusLine().getReasonPhrase());
             //get the response status
             if (httpResponse.getStatusLine().getStatusCode() == 200) {
                 result.setHttpContent(EntityUtils.toString(httpResponse.getEntity(), "gbk"));

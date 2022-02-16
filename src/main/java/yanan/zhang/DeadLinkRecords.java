@@ -31,6 +31,11 @@ public class DeadLinkRecords {
     private Integer statusCode;
 
     /**
+     * http status phrase
+     */
+    private String reasonPhrase;
+
+    /**
      * dead link url
      */
     private String deadLink;
@@ -39,6 +44,12 @@ public class DeadLinkRecords {
      * parent url
      */
     private String parentUrl;
+
+    /**
+     * domain
+     */
+    private String domainUrl;
+
 
     /**
      * Time

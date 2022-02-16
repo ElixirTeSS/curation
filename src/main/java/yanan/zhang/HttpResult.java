@@ -10,6 +10,7 @@ public class HttpResult {
 
     private boolean success;
     private int httpStatus;
+    private String reasonPhrase;
     private String httpContent;
 
 }
