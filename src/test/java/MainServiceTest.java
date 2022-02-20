@@ -55,7 +55,7 @@ public class MainServiceTest {
         index = 1;
 
         for (SingleUrlResult result : list) {
-            if (result.getDetailTargetStatus() != 200 && result.getDetailTargetStatus() != 300) {
+            if (result.getDetailTargetStatus() != 200) {
                 System.out.println((index++) + "," + result);
             }
         }
@@ -78,7 +78,7 @@ public class MainServiceTest {
         index = 1;
 
         for (SingleUrlResult result : list) {
-            if (result.getDetailTargetStatus() != 200 && result.getDetailTargetStatus() != 300) {
+            if (result.getDetailTargetStatus() != 200) {
                 System.out.println((index++) + "," + result);
             }
         }

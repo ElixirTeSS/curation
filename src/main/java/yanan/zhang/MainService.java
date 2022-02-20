@@ -232,11 +232,11 @@ public class MainService {
         if (singleUrlResults != null && singleUrlResults.size() > 0) {
             for (SingleUrlResult major : singleUrlResults) {
                 if (major.getDetailTargetStatus() != 200 && major.getDetailTargetUrl() != null) {
-                    jdbc.saveDeadLinkRecord(this.buildDeadLinkRecords(major));
+                    jdbc.saveDeadLinkRecord(this.buildDeadLinkRecords(major, "major"));
                     if (major.getMinorList() != null && major.getMinorList().size() > 0) {
                         for (SingleUrlResult minor : major.getMinorList()) {
                             if (minor.getDetailTargetStatus() != 200 && minor.getDetailTargetUrl() != null) {
-                                jdbc.saveDeadLinkRecord(this.buildDeadLinkRecords(minor));
+                                jdbc.saveDeadLinkRecord(this.buildDeadLinkRecords(minor, "minor"));
                             }
                         }
                     }
@@ -265,7 +265,7 @@ public class MainService {
      * @param result
      * @return
      */
-    private DeadLinkRecords buildDeadLinkRecords(SingleUrlResult result) {
+    private DeadLinkRecords buildDeadLinkRecords(SingleUrlResult result, String type) {
         DeadLinkRecords model = new DeadLinkRecords();
         model.setDeadLink(result.getDetailTargetUrl());
         model.setStatusCode(result.getDetailTargetStatus());
@@ -274,6 +274,7 @@ public class MainService {
         model.setParentUrl(result.getDetailUrl());
         model.setCategory(result.getCategory());
         model.setDomainUrl(this.getMainUrl(model.getDeadLink()));
+        model.setType(type);
         model.setCreateTime(new Date());
         return model;
     }

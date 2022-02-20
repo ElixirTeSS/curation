@@ -91,6 +91,7 @@ public class MySqlJDBCImpl {
                 "    `page`        int(10) NOT NULL COMMENT 'page number',\n" +
                 "    `status_code` int(10) NOT NULL COMMENT 'http status code',\n" +
                 "    `reason_phrase` varchar(50) COMMENT 'http reason phrase',\n" +
+                "    `type`        varchar(20)  NOT NULL COMMENT 'type: major, minor',\n" +
                 "    `dead_link`   varchar(500) NOT NULL COMMENT 'dead link',\n" +
                 "    `parent_url`  varchar(500) NOT NULL COMMENT 'parent url',\n" +
                 "    `domain_url`  varchar(200) COMMENT 'dead link domain'," +

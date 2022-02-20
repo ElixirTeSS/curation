@@ -36,6 +36,11 @@ public class DeadLinkRecords {
     private String reasonPhrase;
 
     /**
+     * major, minor
+     */
+    private String type;
+
+    /**
      * dead link url
      */
     private String deadLink;
