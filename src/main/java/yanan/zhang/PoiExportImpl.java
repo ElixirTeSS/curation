@@ -33,7 +33,7 @@ public class PoiExportImpl {
         // 获取桌面路径
         FileSystemView fsv = FileSystemView.getFileSystemView();
         String desktop = fsv.getHomeDirectory().getPath();
-        String filePath = desktop + "/Result.csv";
+        String filePath = desktop + "/Result.xls";
 
         File file = new File(filePath);
         OutputStream outputStream = new FileOutputStream(file);

@@ -33,7 +33,7 @@ public class MainService {
 
     private static final String WEB_SITE = "https://tess.elixir-europe.org";
     //	private static final String WEB_SITE = "http://test-tess.its.manchester.ac.uk";
-    private static final int TOTAL_PAGE = 2;
+    private static final int TOTAL_PAGE = 1000;
     private static final int PROCESSED_PER_THREAD = 200;
     public static final String CSS_QUERY_EVENTS = "div.page-header > p > a";
     public static final String CSS_QUERY_MATERIALS_AND_E_LEARNING = "div.text-justify a";
