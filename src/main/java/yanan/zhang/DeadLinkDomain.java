@@ -40,4 +40,19 @@ public class DeadLinkDomain {
      */
     private Date createTime;
 
+    /**
+     * page number
+     */
+    private Integer page;
+
+    /**
+     * detail url
+     */
+    private String detailLink;
+
+    /**
+     * dead link title
+     */
+    private String deadLinkTitle;
+
 }

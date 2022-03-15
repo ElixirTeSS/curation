@@ -15,7 +15,9 @@ public class HttpUtilsTest {
 //		String url = "http://www.genomicsnetwork.ac.uk/forum/events/conferences/title\\,26253\\,en.html";
 //		String url = "https://www.scilifelab.se/events/rnaseqvt17/";
 //		String url = "http://bio.informatics.iupui.edu";
-        String url = "http://biocomp.vbcf.ac.at";
+//		String url = "http://www.escience2011.org";
+//		String url = "https://webprotege.stanford.edu/R9TrjymduaijOFxNNs4OmtVg";
+        String url = "https://www.baidu.com";
 
 //		HttpResult result = HttpUtils.getSingleHttp(url.replaceAll("#", "%23").replaceAll("\\\\", ""));
         HttpResult result = HttpUtils.getSingleHttp(url);

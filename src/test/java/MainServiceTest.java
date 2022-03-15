@@ -1,8 +1,9 @@
 import org.junit.Test;
-import yanan.zhang.MainService;
-import yanan.zhang.SingleUrlResult;
+import yanan.zhang.*;
 
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * @author Yanan Zhang
@@ -14,22 +15,22 @@ public class MainServiceTest {
     @Test
     public void testGetFromList() {
 
-//		List<SingleUrlResult> list = mainService.getEventsList(1);
-        List<SingleUrlResult> list = mainService.getWorkflowsList();
-        System.out.println(list==null);
+        List<SingleUrlResult> list = mainService.getEventsList(1);
+//		List<SingleUrlResult> list = mainService.getWorkflowsList();
+//		System.out.println(list==null);
 
-        if (list!=null) {
-            for (SingleUrlResult result:list) {
-                System.out.println(result);
-            }
-        }
+//		if (list!=null) {
+//			for (SingleUrlResult result:list) {
+//				System.out.println(result);
+//			}
+//		}
 
     }
 
     @Test
     public void testRefillDetail() {
 
-        List<SingleUrlResult> list = mainService.getEventsList(1);
+        List<SingleUrlResult> list = mainService.getEventsList(415);
 
         SingleUrlResult result = list.get(0);
 

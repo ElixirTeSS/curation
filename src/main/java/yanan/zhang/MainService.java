@@ -1,10 +1,22 @@
 package yanan.zhang;
 
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
+import org.jsoup.nodes.Element;
+import org.jsoup.select.Elements;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.io.IOException;
 import java.text.DecimalFormat;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
@@ -12,14 +24,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
-
-import org.jsoup.Jsoup;
-import org.jsoup.nodes.Document;
-import org.jsoup.nodes.Element;
-import org.jsoup.select.Elements;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * Real service can be divided into two steps:
@@ -33,15 +37,29 @@ public class MainService {
 
     private static final String WEB_SITE = "https://tess.elixir-europe.org";
     //	private static final String WEB_SITE = "http://test-tess.its.manchester.ac.uk";
+    /**
+     * 从第几页开始爬
+     */
+    private static final int PAGE_START = 1;
+    /**
+     * 一共爬多少页
+     */
     private static final int TOTAL_PAGE = 1000;
+    /**
+     * 每条线程处理数量
+     */
     private static final int PROCESSED_PER_THREAD = 200;
+    /**
+     * 重试次数
+     */
+    private static final int RETRY_TIMES = 3;
     public static final String CSS_QUERY_EVENTS = "div.page-header > p > a";
     public static final String CSS_QUERY_MATERIALS_AND_E_LEARNING = "div.text-justify a";
     public static final String CSS_QUERY_WORKFLOWS = "div#workflow-diagram-sidebar a";
     /**
      * 正则表达式：过滤主域名
      *
-     * https://tool.chinaz.com/tools/regexgenerate
+     * 授妹妹以鱼不如授妹妹以渔，正则表达式在线生成工具：https://tool.chinaz.com/tools/regexgenerate
      */
     public static final String MAIN_URL_REGEX = "^((https|http|ftp|rtsp|mms)?:\\/\\/)[^\\/]+";
     /**
@@ -49,7 +67,39 @@ public class MainService {
      */
     public static Map<String, CacheInfo> MAIN_URL_DEAD_MAP = new HashMap<>();
 
+    /**
+     * 黑名单http status code
+     */
+    private static final int BLACK_LIST_CODE = 1;
 
+    /**
+     * 黑名单reason phrase
+     */
+    private static final String BLACK_LIST_MSG = "on the black list";
+
+    /**
+     * 黑名单http status code
+     */
+    private static final int ILLEGAL_URL_CODE = 2;
+
+    /**
+     * 黑名单reason phrase
+     */
+    private static final String ILLEGAL_URL_MSG = "illegal url";
+
+    private List<BlackListDomain> blackListDomains = null;
+
+    private List<String> legalSuffixList = null;
+
+    int totalEvents = 0;
+    int totalEventsDead = 0;
+    int totalMaterials = 0;
+    int totalMaterialsDead = 0;
+    int totalElearning = 0;
+    int totalElearningDead = 0;
+    int totalWorkflows = 0;
+    int totalWorkflowsDead = 0;
+    int totalDomainDead = 0;
 
     /**
      * 单线程方式运行
@@ -57,6 +107,7 @@ public class MainService {
      * @return
      */
     public List<SingleUrlResult> execute() {
+        MySqlJDBCImpl jdbc = new MySqlJDBCImpl();
         List<SingleUrlResult> resultList = new ArrayList<>();
         List<SingleUrlResult> totalPageList = this.crawlData();
         //四舍五入保留两位小数
@@ -76,7 +127,6 @@ public class MainService {
             }
             resultList.add(obj);
         }
-        MySqlJDBCImpl jdbc = new MySqlJDBCImpl();
         jdbc.dropTable();
         jdbc.createTable();
         this.saveDeadLink2DB(jdbc, resultList);
@@ -85,89 +135,49 @@ public class MainService {
             jdbc.dropTableDomain();
             jdbc.createTableDomain();
             this.saveDeadLinkDomain2DB(jdbc, new ArrayList<>(MAIN_URL_DEAD_MAP.values()));
+            totalDomainDead = MAIN_URL_DEAD_MAP.size();
         }
-
+        //保存汇总数据
+        this.saveCollectInfo(jdbc);
+        PoiExportImpl poi = new PoiExportImpl();
+        try {
+            poi.exportExcel();
+        } catch (IOException e) {
+            logger.error("export excel error!", e);
+        }
         return resultList;
     }
-
-
-//    public List<SingleUrlResult> execute() {
-//
-//        List<SingleUrlResult> retList = new ArrayList<>();
-//
-//        for (int i = 1; i <= TOTAL_PAGE; i++) {
-//            List<SingleUrlResult> singlePageList = getEventsList(i);
-//            if (singlePageList == null || singlePageList.isEmpty()) {
-//                break;
-//            }
-//            for (SingleUrlResult result : singlePageList) {
-//                this.refillDetail(result, CSS_QUERY_EVENTS);
-//                retList.add(result);
-//            }
-//        }
-//
-//        return retList;
-//    }
 
     /**
      * 多线程方式运行
      *
      * @return
      */
+    @Deprecated
     public List<SingleUrlResult> executeMultithreading() {
-
+        MySqlJDBCImpl jdbc = new MySqlJDBCImpl();
         List<SingleUrlResult> resultList = new ArrayList<>();
         List<SingleUrlResult> totalPageList = this.crawlData();
-//        // craw all data
-//        for (int i = 1; i <= TOTAL_PAGE; i++) {
-//            List<SingleUrlResult> singlePageListEvents = this.getEventsList(i);
-//            List<SingleUrlResult> singlePageListMaterials = this.getMaterialsOrELearningList(i, CategoryEnum.MATERIALS);
-//            List<SingleUrlResult> singlePageListELearning = this.getMaterialsOrELearningList(i, CategoryEnum.E_LEARNING);
-//
-//            //Events
-//            if (singlePageListEvents != null && singlePageListEvents.size() > 0) {
-//                totalPageList.addAll(singlePageListEvents);
-//                System.out.println("***********爬到Events数据" + singlePageListEvents.size() + "条***********");
-//            }
-//            //Materials
-//            if (singlePageListMaterials != null && singlePageListMaterials.size() > 0) {
-//                totalPageList.addAll(singlePageListMaterials);
-//                System.out.println("***********爬到Materials数据" + singlePageListMaterials.size() + "条***********");
-//            }
-//            //E-Learning
-//            if (singlePageListELearning != null && singlePageListELearning.size() > 0) {
-//                totalPageList.addAll(singlePageListELearning);
-//                System.out.println("***********爬到E-Learning数据" + singlePageListELearning.size() + "条***********");
-//            }
-//        }
-//        List<SingleUrlResult> singlePageListWorkflows = this.getWorkflowsList();
-//        //Workflows
-//        if (singlePageListWorkflows != null && singlePageListWorkflows.size() > 0) {
-//            totalPageList.addAll(singlePageListWorkflows);
-//            System.out.println("***********爬到Workflows数据" + singlePageListWorkflows.size() + "条***********");
-//        }
-//        System.out.println("***********共计爬取到数据" + totalPageList.size() + "条***********");
-
-        // multithreading
-        // the start time
+        // 多线程处理
+        // 开始时间
         long start = System.currentTimeMillis();
-        // a new thread for every 50 data
+        // 每50条数据开启一条线程
         int threadSize = PROCESSED_PER_THREAD;
-        // total amount of the data
+        // 总数据条数
         int dataSize = totalPageList.size();
-        // total amount of the thread
+        // 线程数
         int threadNum = dataSize / threadSize + 1;
-        // define the thread number as an integer
+        // 定义标记,过滤threadNum为整数
         boolean special = dataSize % threadSize == 0;
 
-        // create a thread pool
+        // 创建一个线程池
         ExecutorService exec = Executors.newFixedThreadPool(threadNum);
-        // define a task set
+        // 定义一个任务集合
         List<Callable<List<SingleUrlResult>>> tasks = new ArrayList<>();
         Callable<List<SingleUrlResult>> task;
         List<SingleUrlResult> currentList;
 
-        // define data for every thread
+        // 确定每条线程的数据
         for (int i = 0; i < threadNum; i++) {
             if (i == threadNum - 1) {
                 if (special) {
@@ -177,7 +187,7 @@ public class MainService {
             } else {
                 currentList = totalPageList.subList(threadSize * i, threadSize * (i + 1));
             }
-            // System.out.println((i + 1) + "thread：" + currentList.toString());
+            // System.out.println("第" + (i + 1) + "组：" + currentList.toString());
             final List<SingleUrlResult> list = currentList;
             task = new Callable<List<SingleUrlResult>>() {
 
@@ -197,12 +207,11 @@ public class MainService {
                     return list;
                 }
             };
-            // The list of task containers submitted here and the returned Future list have an orderly correspondence
+            // 这里提交的任务容器列表和返回的Future列表存在顺序对应的关系
             tasks.add(task);
         }
 
         try {
-            MySqlJDBCImpl jdbc = new MySqlJDBCImpl();
             jdbc.dropTable();
             jdbc.createTable();
             List<Future<List<SingleUrlResult>>> results = exec.invokeAll(tasks);
@@ -213,7 +222,7 @@ public class MainService {
         } catch (Exception e) {
             e.printStackTrace();
         } finally {
-            // close the thread pool
+            // 关闭线程池
             exec.shutdown();
             System.out.println("线程任务执行结束");
             System.err.println("执行任务消耗了: " + (System.currentTimeMillis() - start) / 1000 + "秒");
@@ -232,16 +241,41 @@ public class MainService {
         if (singleUrlResults != null && singleUrlResults.size() > 0) {
             for (SingleUrlResult major : singleUrlResults) {
                 if (major.getDetailTargetStatus() != 200 && major.getDetailTargetUrl() != null) {
+                    if (major.getDetailTargetStatus() != BLACK_LIST_CODE) {
+                        //只统计不是黑名单域名的死链数
+                        this.collectCategoryDeadNumber(major);
+                    }
                     jdbc.saveDeadLinkRecord(this.buildDeadLinkRecords(major, "major"));
-                    if (major.getMinorList() != null && major.getMinorList().size() > 0) {
-                        for (SingleUrlResult minor : major.getMinorList()) {
-                            if (minor.getDetailTargetStatus() != 200 && minor.getDetailTargetUrl() != null) {
-                                jdbc.saveDeadLinkRecord(this.buildDeadLinkRecords(minor, "minor"));
+                }
+                if (major.getMinorList() != null && major.getMinorList().size() > 0) {
+                    for (SingleUrlResult minor : major.getMinorList()) {
+                        if (minor.getDetailTargetStatus() != 200 && minor.getDetailTargetUrl() != null) {
+                            if (minor.getDetailTargetStatus() != BLACK_LIST_CODE) {
+                                //只统计不是黑名单域名的死链数
+                                this.collectCategoryDeadNumber(minor);
                             }
+                            jdbc.saveDeadLinkRecord(this.buildDeadLinkRecords(minor, "minor"));
                         }
                     }
                 }
             }
+        }
+    }
+
+    /**
+     * 统计各类型死链数
+     *
+     * @param result
+     */
+    private void collectCategoryDeadNumber(SingleUrlResult result) {
+        if (result.getCategory().equals(CategoryEnum.EVENTS.getName())) {
+            totalEventsDead += 1;
+        } else if (result.getCategory().equals(CategoryEnum.MATERIALS.getName())) {
+            totalMaterialsDead += 1;
+        } else if (result.getCategory().equals(CategoryEnum.E_LEARNING.getName())) {
+            totalElearningDead += 1;
+        } else if (result.getCategory().equals(CategoryEnum.WORKFLOWS.getName())) {
+            totalWorkflowsDead += 1;
         }
     }
 
@@ -268,6 +302,7 @@ public class MainService {
     private DeadLinkRecords buildDeadLinkRecords(SingleUrlResult result, String type) {
         DeadLinkRecords model = new DeadLinkRecords();
         model.setDeadLink(result.getDetailTargetUrl());
+        model.setDeadLinkTitle(result.getDetailTargetTitle());
         model.setStatusCode(result.getDetailTargetStatus());
         model.setReasonPhrase(result.getDetailTargetReasonPhrase());
         model.setPage(result.getListIndex());
@@ -275,6 +310,9 @@ public class MainService {
         model.setCategory(result.getCategory());
         model.setDomainUrl(this.getMainUrl(model.getDeadLink()));
         model.setType(type);
+        model.setStart(result.getStart());
+        model.setEnd(result.getEnd());
+        model.setDuration(result.getDuration());
         model.setCreateTime(new Date());
         return model;
     }
@@ -292,13 +330,34 @@ public class MainService {
         model.setStatusCode(cache.getHttpStatus());
         model.setReasonPhrase(cache.getReasonPhrase());
         model.setLinkNumber(jdbc.countDeadLinkRecordsByDomain(cache.getUrl()));
+        model.setPage(cache.getPage());
+        model.setDetailLink(cache.getDetailLink());
+        model.setDeadLinkTitle(cache.getDeadLinkTitle());
         model.setCreateTime(new Date());
         return model;
     }
 
+    /**
+     * 保存汇总数据
+     *
+     * @param jdbc
+     */
+    private void saveCollectInfo(MySqlJDBCImpl jdbc) {
+        CollectInfo collectInfo = new CollectInfo();
+        collectInfo.setEvents(totalEvents);
+        collectInfo.setEventsDead(totalEventsDead);
+        collectInfo.setMaterials(totalMaterials);
+        collectInfo.setMaterialsDead(totalMaterialsDead);
+        collectInfo.setElearning(totalElearning);
+        collectInfo.setElearningDead(totalElearningDead);
+        collectInfo.setWorkflows(totalWorkflows);
+        collectInfo.setWorkflowsDead(totalWorkflowsDead);
+        collectInfo.setCreateDate(DateUtils.format(new Date(), DateUtils.FORMATTER_DATE));
+        jdbc.saveCollectInfo(collectInfo);
+    }
 
     /**
-     * crawl all data
+     * 爬取所有数据
      *
      * @return
      */
@@ -307,8 +366,8 @@ public class MainService {
         boolean eventsContinue = true;
         boolean materialsContinue = true;
         boolean eLearningContinue = true;
-        // crawl all data
-        for (int i = 1; i <= TOTAL_PAGE; i++) {
+        // 先爬完所有数据
+        for (int i = PAGE_START; i <= TOTAL_PAGE; i++) {
             List<SingleUrlResult> singlePageListEvents = null;
             if (eventsContinue) {
                 singlePageListEvents = this.getEventsList(i);
@@ -325,6 +384,7 @@ public class MainService {
             //Events
             if (singlePageListEvents != null && singlePageListEvents.size() > 0) {
                 totalPageList.addAll(singlePageListEvents);
+                totalEvents = totalEvents + singlePageListEvents.size();
                 logger.info("***********爬到Events数据{}条, 当前第{}页***********", singlePageListEvents.size(), i);
             } else {
                 eventsContinue = false;
@@ -332,6 +392,7 @@ public class MainService {
             //Materials
             if (singlePageListMaterials != null && singlePageListMaterials.size() > 0) {
                 totalPageList.addAll(singlePageListMaterials);
+                totalMaterials = totalMaterials + singlePageListMaterials.size();
                 logger.info("***********爬到Materials数据{}条, 当前第{}页***********", singlePageListMaterials.size(), i);
             } else {
                 materialsContinue = false;
@@ -339,11 +400,12 @@ public class MainService {
             //E-Learning
             if (singlePageListELearning != null && singlePageListELearning.size() > 0) {
                 totalPageList.addAll(singlePageListELearning);
+                totalElearning = totalElearning + singlePageListELearning.size();
                 logger.info("***********爬到E-Learning数据{}条, 当前第{}页***********", singlePageListELearning.size(), i);
             } else {
                 eLearningContinue = false;
             }
-            // if there is no more data, jump out
+            //全都爬不到就跳出循环
             if (!eventsContinue && !materialsContinue && !eLearningContinue) {
                 break;
             }
@@ -352,15 +414,15 @@ public class MainService {
         //Workflows
         if (singlePageListWorkflows.size() > 0) {
             totalPageList.addAll(singlePageListWorkflows);
+            totalWorkflows = singlePageListWorkflows.size();
             logger.info("***********爬到Workflows数据{}条***********", singlePageListWorkflows.size());
         }
-        logger.info("***********共计爬取到数据{}条***********", totalPageList.size());
+        logger.info("***********共计爬取到数据{}条, Events{}条, Materials{}条, ELearning{}条, Wrokflows{}条***********", totalPageList.size(), totalEvents, totalMaterials, totalElearning, totalWorkflows);
         return totalPageList;
     }
 
-
     /**
-     * Visit a separate page (event）
+     * 获取Events页面的数据
      *
      * @param index
      * @return
@@ -369,7 +431,7 @@ public class MainService {
 
         String url = WEB_SITE + "/events?include_expired=true&page=" + index;
 
-        HttpResult listHttpResult = HttpUtils.getSingleHttpWithRetry(url, 3);
+        HttpResult listHttpResult = HttpUtils.getSingleHttpWithRetry(url, RETRY_TIMES);
         if (!listHttpResult.isSuccess() || listHttpResult.getHttpStatus() != 200) {
             return null;
         }
@@ -379,39 +441,48 @@ public class MainService {
         final List<SingleUrlResult> retList = new ArrayList<>();
 
         Document doc = Jsoup.parse(httpContent);
-        // #: id
-        // .: class
-        //<div id="home"> -- <ul class="media-grid"> -- <li class="media-item">
+        //下面这行字符串是整个代码的最难点
+        //这就是jQuery选择器的语法，并不是jsoup独创的，我猜python可以拿过去用
+        //前面什么都没有，如div，ul，li就是标签名
+        //前面是#，是标签的id
+        //前面是.，是标签的class，注意：一个标签可以有多个class，我可以只引用一个
+        //【>】代表标签向下，可以跨级
+        //因此，下面这一行，可以分析为，<div id="home">下的<ul class="media-grid">下的<li class="media-item">
+        //注意：这种代码非常脆弱，如果人家的H5代码一改，你马上就爬不到了，但是也没办法。
+        //还有另一种是不爬H5，爬api；不过你这里不涉及，就别多说了
         Elements elements = doc.select("div#home > ul.media-grid > li.media-item");
         for (Element element : elements) {
-
+//			System.out.println(element.select("#event-title").text());
+//			System.out.println(element.select("a.media-view").attr("href"));
+//			System.out.println("*******************");
+            //对于同一个详情页，要获取它的title和url，不在同一个标签上，这两个标签的父又是<li>；因此，循环多个详情页，循环只能写到<li>，后面的就要在循环里处理了
+            //这里的element就是<li>
             SingleUrlResult singleUrlResult = new SingleUrlResult();
             singleUrlResult.setCategory(CategoryEnum.EVENTS.getName());
             singleUrlResult.setListIndex(index);
             singleUrlResult.setListTitle(element.select("#event-title").text());
             singleUrlResult.setDetailUrl(WEB_SITE + element.select("a.media-view").attr("href"));
             retList.add(singleUrlResult);
-
         }
         return retList;
     }
 
     public void refillDetail(SingleUrlResult singleUrlResult, String cssQuery) {
-
-        //visit the detail page
+        //访问detail页面
         String detailUrl = singleUrlResult.getDetailUrl();
-
-        HttpResult detailHttpResult = HttpUtils.getSingleHttpWithRetry(detailUrl, 3);
+        HttpResult detailHttpResult = HttpUtils.getSingleHttpWithRetry(detailUrl, RETRY_TIMES);
         singleUrlResult.setDetailHttpStatus(detailHttpResult.getHttpStatus());
         if ((!detailHttpResult.isSuccess()) || detailHttpResult.getHttpStatus() != 200) {
+            logger.error("Detail页面都特么进不去, singleUrlResult={}", singleUrlResult);
+//            singleUrlResult.setDetailTargetTitle();
+            singleUrlResult.setDetailTargetUrl(detailUrl);
+            singleUrlResult.setDetailTargetStatus(detailHttpResult.getHttpStatus());
+            singleUrlResult.setDetailTargetReasonPhrase("internal error");
             return;
         }
-
-        //parse the detail page and get the target link
+        //分析detail页面，获得target页面
         String detailHttpContent = detailHttpResult.getHttpContent();
         Document doc = Jsoup.parse(detailHttpContent);
-
-        //find 'a' which is the target link
         Elements elements = doc.select(cssQuery);
         boolean major = true;
         List<SingleUrlResult> minorList = new ArrayList<>();
@@ -420,71 +491,206 @@ public class MainService {
                 if (major) {
                     //只有第一个a标签是major
                     major = false;
-                    singleUrlResult.setDetailTargetTitle(a.text());
-                    singleUrlResult.setDetailTargetUrl(a.attr("href"));
-                    String majorUrl = singleUrlResult.getDetailTargetUrl();
-                    //获取目标url的主域名
-                    String mainUrl = this.getMainUrl(majorUrl);
-                    CacheInfo mainUrlCache = MAIN_URL_DEAD_MAP.get(mainUrl);
-                    if (mainUrlCache == null) {
-                        //主域名没在缓存map中就正常请求获取结果
-                        HttpResult majorUrlHttpResult = HttpUtils.getSingleHttpWithRetry(majorUrl, 3);
-                        singleUrlResult.setDetailTargetStatus(majorUrlHttpResult.getHttpStatus());
-                        singleUrlResult.setDetailTargetReasonPhrase(majorUrlHttpResult.getReasonPhrase());
-                        //如果请求不成功，则单独请求主域名
-                        if (mainUrl != null && majorUrlHttpResult.getHttpStatus() != 200) {
-                            HttpResult mainUrlResult = HttpUtils.getSingleHttpWithRetry(mainUrl, 3);
-                            if (mainUrlResult.getHttpStatus() != 200) {
-                                //如果主域名都访问不成功，而且主域名在MAIN_URL_DEAD_MAP中不存在就放进去
-                                MAIN_URL_DEAD_MAP.computeIfAbsent(mainUrl, k -> new CacheInfo(mainUrl, mainUrlResult.getHttpStatus(), mainUrlResult.getReasonPhrase()));
-                                logger.info("缓存MAIN_URL_DEAD_MAP={}", MAIN_URL_DEAD_MAP);
-                            }
-                        }
-                    } else {
-                        //主域名在缓存map中就把主域名的statusCode放进去
-                        singleUrlResult.setDetailTargetStatus(mainUrlCache.getHttpStatus());
-                        singleUrlResult.setDetailTargetReasonPhrase(mainUrlCache.getReasonPhrase());
-                    }
+                    this.refillMajor(singleUrlResult, a);
                 } else {
                     //其余都是minor
-                    SingleUrlResult minor = new SingleUrlResult();
-                    minor.setCategory(singleUrlResult.getCategory());
-                    minor.setListIndex(singleUrlResult.getListIndex());
-                    minor.setListTitle(singleUrlResult.getListTitle());
-                    minor.setDetailUrl(singleUrlResult.getDetailUrl());
-                    minor.setDetailHttpStatus(singleUrlResult.getDetailHttpStatus());
-                    minor.setDetailTargetTitle(a.text());
-                    minor.setDetailTargetUrl(a.attr("href"));
-                    String minorUrl = minor.getDetailTargetUrl();
-                    //获取目标url的主域名
-                    String mainUrl = this.getMainUrl(minorUrl);
-                    CacheInfo mainUrlCache = MAIN_URL_DEAD_MAP.get(mainUrl);
-                    if (mainUrlCache == null) {
-                        //主域名没在缓存map中就正常请求获取结果
-                        HttpResult minorUrlHttpResult = HttpUtils.getSingleHttpWithRetry(minorUrl, 3);
-                        minor.setDetailTargetStatus(minorUrlHttpResult.getHttpStatus());
-                        //如果请求不成功，则单独请求主域名
-                        if (mainUrl != null && minorUrlHttpResult.getHttpStatus() != 200) {
-                            HttpResult mainUrlResult = HttpUtils.getSingleHttpWithRetry(mainUrl, 3);
-                            if (mainUrlResult.getHttpStatus() != 200) {
-                                //如果主域名都访问不成功，而且主域名在MAIN_URL_DEAD_MAP中不存在就放进去
-                                MAIN_URL_DEAD_MAP.computeIfAbsent(mainUrl, k -> new CacheInfo(mainUrl, mainUrlResult.getHttpStatus(), mainUrlResult.getReasonPhrase()));
-                            }
-                        }
-                    } else {
-                        //主域名在缓存map中就把主域名的statusCode放进去
-                        minor.setDetailTargetStatus(mainUrlCache.getHttpStatus());
-                        minor.setDetailTargetReasonPhrase(mainUrlCache.getReasonPhrase());
-                    }
-                    minorList.add(minor);
+                    this.refillMinor(singleUrlResult, minorList, a);
                 }
             }
         }
         if (minorList.size() > 0) {
             singleUrlResult.setMinorList(minorList);
         }
+
+        //处理Events的时间周期
+        if (singleUrlResult.getCategory().equals(CategoryEnum.EVENTS.getName())) {
+            this.refillStartAndEnd(singleUrlResult, doc);
+        }
     }
 
+    /**
+     * 填充Major数据
+     *
+     * @param singleUrlResult
+     * @param a
+     */
+    private void refillMajor(SingleUrlResult singleUrlResult, Element a) {
+        singleUrlResult.setDetailTargetTitle(a.text());
+        singleUrlResult.setDetailTargetUrl(a.attr("href"));
+        String majorUrl = singleUrlResult.getDetailTargetUrl();
+        //获取目标url的主域名
+        String mainUrl = this.getMainUrl(majorUrl);
+//        logger.info("refillMajor, majorUrl====={}, mainUrl===={}", majorUrl, mainUrl);
+        //如果在黑名单就不请求，直接设置个固定code和message
+        if (this.isOnTheBlacklist(mainUrl)) {
+            singleUrlResult.setDetailTargetStatus(BLACK_LIST_CODE);
+            singleUrlResult.setDetailTargetReasonPhrase(BLACK_LIST_MSG);
+        }
+//        else if (mainUrl != null && !this.isLegalSuffix(mainUrl)) {
+//            //如果主域名不合法，直接设置个固定code和message
+//            singleUrlResult.setDetailTargetStatus(ILLEGAL_URL_CODE);
+//            singleUrlResult.setDetailTargetReasonPhrase(ILLEGAL_URL_MSG);
+//            MAIN_URL_DEAD_MAP.computeIfAbsent(mainUrl, k -> new CacheInfo(mainUrl, ILLEGAL_URL_CODE, ILLEGAL_URL_MSG,
+//                    singleUrlResult.getListIndex(), singleUrlResult.getDetailUrl(), singleUrlResult.getDetailTargetTitle()));
+//            logger.info("major非法域名, 缓存MAIN_URL_DEAD_MAP={}", MAIN_URL_DEAD_MAP);
+//        }
+        else {
+            CacheInfo mainUrlCache = MAIN_URL_DEAD_MAP.get(mainUrl);
+            if (mainUrlCache == null) {
+                //主域名没在缓存map中就正常请求获取结果
+                HttpResult majorUrlHttpResult = HttpUtils.getSingleHttpWithRetry(majorUrl, RETRY_TIMES);
+                singleUrlResult.setDetailTargetStatus(majorUrlHttpResult.getHttpStatus());
+                singleUrlResult.setDetailTargetReasonPhrase(majorUrlHttpResult.getReasonPhrase());
+                //如果请求不成功，则单独请求主域名
+                if (mainUrl != null && majorUrlHttpResult.getHttpStatus() != 200) {
+                    HttpResult mainUrlResult = HttpUtils.getSingleHttpWithRetry(mainUrl, RETRY_TIMES);
+                    if (mainUrlResult.getHttpStatus() != 200) {
+                        //如果主域名都访问不成功，而且主域名在MAIN_URL_DEAD_MAP中不存在就放进去
+                        MAIN_URL_DEAD_MAP.computeIfAbsent(mainUrl, k -> new CacheInfo(mainUrl, mainUrlResult.getHttpStatus(), mainUrlResult.getReasonPhrase(),
+                                singleUrlResult.getListIndex(), singleUrlResult.getDetailUrl(), singleUrlResult.getDetailTargetTitle()));
+                        logger.info("major缓存MAIN_URL_DEAD_MAP={}", MAIN_URL_DEAD_MAP);
+                    }
+                }
+            } else {
+                //主域名在缓存map中就把主域名的statusCode放进去
+                singleUrlResult.setDetailTargetStatus(mainUrlCache.getHttpStatus());
+                singleUrlResult.setDetailTargetReasonPhrase(mainUrlCache.getReasonPhrase());
+            }
+        }
+    }
+
+    /**
+     * 填充Minor数据
+     *
+     * @param singleUrlResult
+     * @param minorList
+     * @param a
+     */
+    private void refillMinor(SingleUrlResult singleUrlResult, List<SingleUrlResult> minorList, Element a) {
+        SingleUrlResult minor = new SingleUrlResult();
+        minor.setCategory(singleUrlResult.getCategory());
+        minor.setListIndex(singleUrlResult.getListIndex());
+        minor.setListTitle(singleUrlResult.getListTitle());
+        minor.setDetailUrl(singleUrlResult.getDetailUrl());
+        minor.setDetailHttpStatus(singleUrlResult.getDetailHttpStatus());
+        minor.setDetailTargetTitle(a.text());
+        minor.setDetailTargetUrl(a.attr("href"));
+        String minorUrl = minor.getDetailTargetUrl();
+        //获取目标url的主域名
+        String mainUrl = this.getMainUrl(minorUrl);
+//        logger.info("refillMinor, majorUrl====={}, mainUrl===={}", minorUrl, mainUrl);
+        //如果在黑名单就不请求，直接设置个固定code和message
+        if (this.isOnTheBlacklist(mainUrl)) {
+            minor.setDetailTargetStatus(BLACK_LIST_CODE);
+            minor.setDetailTargetReasonPhrase(BLACK_LIST_MSG);
+        }
+//        else if (mainUrl != null && !this.isLegalSuffix(mainUrl)) {
+//            //如果主域名不合法，直接设置个固定code和message
+//            singleUrlResult.setDetailTargetStatus(ILLEGAL_URL_CODE);
+//            singleUrlResult.setDetailTargetReasonPhrase(ILLEGAL_URL_MSG);
+//            MAIN_URL_DEAD_MAP.computeIfAbsent(mainUrl, k -> new CacheInfo(mainUrl, ILLEGAL_URL_CODE, ILLEGAL_URL_MSG,
+//                    singleUrlResult.getListIndex(), singleUrlResult.getDetailUrl(), singleUrlResult.getDetailTargetTitle()));
+//            logger.info("minor非法域名, 缓存MAIN_URL_DEAD_MAP={}", MAIN_URL_DEAD_MAP);
+//        }
+        else {
+            CacheInfo mainUrlCache = MAIN_URL_DEAD_MAP.get(mainUrl);
+            if (mainUrlCache == null) {
+                //主域名没在缓存map中就正常请求获取结果
+                HttpResult minorUrlHttpResult = HttpUtils.getSingleHttpWithRetry(minorUrl, RETRY_TIMES);
+                minor.setDetailTargetStatus(minorUrlHttpResult.getHttpStatus());
+                minor.setDetailTargetReasonPhrase(minorUrlHttpResult.getReasonPhrase());
+                //如果请求不成功，则单独请求主域名
+                if (mainUrl != null && minorUrlHttpResult.getHttpStatus() != 200) {
+                    HttpResult mainUrlResult = HttpUtils.getSingleHttpWithRetry(mainUrl, RETRY_TIMES);
+                    if (mainUrlResult.getHttpStatus() != 200) {
+                        //如果主域名都访问不成功，而且主域名在MAIN_URL_DEAD_MAP中不存在就放进去
+                        MAIN_URL_DEAD_MAP.computeIfAbsent(mainUrl, k -> new CacheInfo(mainUrl, mainUrlResult.getHttpStatus(), mainUrlResult.getReasonPhrase(),
+                                singleUrlResult.getListIndex(), singleUrlResult.getDetailUrl(), minor.getDetailTargetTitle()));
+                        logger.info("minor缓存MAIN_URL_DEAD_MAP={}", MAIN_URL_DEAD_MAP);
+                    }
+                }
+            } else {
+                //主域名在缓存map中就把主域名的statusCode放进去
+                minor.setDetailTargetStatus(mainUrlCache.getHttpStatus());
+                minor.setDetailTargetReasonPhrase(mainUrlCache.getReasonPhrase());
+            }
+        }
+        minorList.add(minor);
+    }
+
+    /**
+     * 填充起始和结束时间数据
+     *
+     * @param singleUrlResult
+     * @param doc
+     */
+    private void refillStartAndEnd(SingleUrlResult singleUrlResult, Document doc) {
+        SimpleDateFormat format = new SimpleDateFormat("EEE, dd MMM yyyy '@' HH:mm", Locale.UK);
+        Elements timeElement = doc.select("div.dont-break-out > p");
+        Date start = null;
+        Date end = null;
+        for (Element p : timeElement) {
+            String str = p.text();
+            if (start != null && end != null) {
+                break;
+            }
+            try {
+                if (str.contains("Start")) {
+                    start = format.parse(p.ownText());
+                    singleUrlResult.setStart(p.ownText());
+                } else if (str.contains("End")) {
+                    end = format.parse(p.ownText());
+                    singleUrlResult.setEnd(p.ownText());
+                }
+            } catch (ParseException e) {
+                logger.error("ParseException", e);
+            }
+        }
+        if (start != null && end != null) {
+            int duration = DateUtils.intervalDays(start, end);
+            if (duration == 0) {
+                singleUrlResult.setDuration("1");
+            } else {
+                singleUrlResult.setDuration(Integer.toString(duration));
+            }
+        }
+    }
+
+    /**
+     * 是否在黑名单
+     *
+     * @param domainUrl
+     * @return
+     */
+    private boolean isOnTheBlacklist(String domainUrl) {
+        if (blackListDomains == null) {
+            MySqlJDBCImpl jdbc = new MySqlJDBCImpl();
+            blackListDomains = jdbc.selectBlackListDomain();
+        }
+        for (BlackListDomain obj : blackListDomains) {
+            if (obj.getDomainUrl().equals(domainUrl)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+//    /**
+//     * url是否为合法后缀
+//     *
+//     * @param domainUrl
+//     * @return
+//     */
+//    private boolean isLegalSuffix(String domainUrl) {
+//        if (legalSuffixList == null) {
+//            String str = "ac,uk,ad,asia,arts,ba,ca,cm,cn,com,cs,edu,eu,firm,gov,gp,hk,info,int,io,jobs,jp,top,museum,name,nato,net,ng,mil,om,org,post,pro,ps,cc,vip,club,win,pub,site,xyz,store,td,tel,tl,tn,travel,ug,us,web";
+//            legalSuffixList = Arrays.asList(str.split(","));
+//        }
+//        String[] split = domainUrl.split("\\.");
+//        String suffix = split[split.length - 1];
+//        return legalSuffixList.contains(suffix);
+//    }
 
     /**
      * 获取主域名
@@ -505,9 +711,8 @@ public class MainService {
         return null;
     }
 
-
     /**
-     * Visit a separate page (material & e-learning）
+     * 获取Materials或E-Learning页面的数据
      *
      * @param index
      * @param categoryEnum
@@ -521,7 +726,7 @@ public class MainService {
             url = WEB_SITE + "/elearning_materials?page=" + index;
         }
 
-        HttpResult listHttpResult = HttpUtils.getSingleHttpWithRetry(url, 3);
+        HttpResult listHttpResult = HttpUtils.getSingleHttpWithRetry(url, RETRY_TIMES);
         if (!listHttpResult.isSuccess() || listHttpResult.getHttpStatus() != 200) {
             return null;
         }
@@ -541,14 +746,14 @@ public class MainService {
     }
 
     /**
-     * Visit a separate page (workflows）
+     * 获取Workflows或Providers页面的数据
      *
      * @return
      */
     public List<SingleUrlResult> getWorkflowsList() {
         String url = WEB_SITE + "/workflows";
 
-        HttpResult listHttpResult = HttpUtils.getSingleHttpWithRetry(url, 3);
+        HttpResult listHttpResult = HttpUtils.getSingleHttpWithRetry(url, RETRY_TIMES);
         if (!listHttpResult.isSuccess() || listHttpResult.getHttpStatus() != 200) {
             return null;
         }
@@ -568,4 +773,3 @@ public class MainService {
     }
 
 }
-
