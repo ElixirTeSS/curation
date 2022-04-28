@@ -11,17 +11,17 @@ import java.util.Date;
 public class BlackListDomain {
 
     /**
-     * 主键
+     * Key
      */
     private Long id;
 
     /**
-     * 主域名
+     * domain URL
      */
     private String domainUrl;
 
     /**
-     * 添加时间
+     * create time
      */
     private Date createTime;
 }

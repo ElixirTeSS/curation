@@ -1,9 +1,11 @@
 package yanan.zhang.web;
 
+import org.apache.commons.collections4.CollectionUtils;
 import yanan.zhang.*;
 import yanan.zhang.web.model.*;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.Date;
 import java.util.Iterator;
 import java.util.List;
@@ -27,7 +29,7 @@ public class WebDataImpl {
         if (collectInfos != null && collectInfos.size() > 0) {
             List<CollectInfo> temp = collectInfos.stream().filter(x -> x.getCreateDate().equals(currentDateStr)).collect(Collectors.toList());
             if (temp.size() > 0) {
-                CollectInfo collectInfo = collectInfos.get(0);
+                CollectInfo collectInfo = temp.get(0);
                 overview.setTotalLinks(collectInfo.getEvents() + collectInfo.getMaterials() + collectInfo.getElearning() + collectInfo.getWorkflows());
                 overview.setTotalDeadLinks(collectInfo.getEventsDead() + collectInfo.getMaterialsDead() + collectInfo.getElearningDead() + collectInfo.getWorkflowsDead());
                 overview.setTotalDeadDomains(collectInfo.getDomainDead());
@@ -42,7 +44,7 @@ public class WebDataImpl {
         if (collectInfos != null && collectInfos.size() > 0) {
             List<CollectInfo> temp = collectInfos.stream().filter(x -> x.getCreateDate().equals(currentDateStr)).collect(Collectors.toList());
             if (temp.size() > 0) {
-                CollectInfo collectInfo = collectInfos.get(0);
+                CollectInfo collectInfo = temp.get(0);
                 detail.setEvents(collectInfo.getEvents());
                 detail.setEventsDead(collectInfo.getEventsDead());
                 detail.setMaterials(collectInfo.getMaterials());
@@ -66,7 +68,13 @@ public class WebDataImpl {
         while (it.hasNext()) {
             PieChart pieChart = new PieChart();
             Integer key = it.next();
-            pieChart.setType(key.toString());
+            if (key == 0) {
+                pieChart.setType(key + " (Other Errors)");
+            } else if (key == 1) {
+                pieChart.setType(key + " (Black List)");
+            } else {
+                pieChart.setType(key.toString());
+            }
             pieChart.setValue(map.get(key));
             list.add(pieChart);
         }
@@ -78,8 +86,8 @@ public class WebDataImpl {
         StackedChartInfo result = new StackedChartInfo();
         List<StackedChart> list = new ArrayList<>();
         List<DeadLinkRecords> yesterdayData = jdbc.selectDeadLinkRecords(DateUtils.format(DateUtils.minusDays(current, 1), DateUtils.FORMATTER_DATE_WITHOUT_SYMBOL));
-        Map<String, Long> todayMap = currentData.stream().collect(Collectors.groupingBy(DeadLinkRecords::getCategory, Collectors.counting()));
-        Map<String, Long> yesterdayMap = yesterdayData.stream().collect(Collectors.groupingBy(DeadLinkRecords::getCategory, Collectors.counting()));
+        Map<String, Long> todayMap = currentData.stream().filter(x -> x.getStatusCode() != 1).collect(Collectors.groupingBy(DeadLinkRecords::getCategory, Collectors.counting()));
+        Map<String, Long> yesterdayMap = yesterdayData.stream().filter(x -> x.getStatusCode() != 1).collect(Collectors.groupingBy(DeadLinkRecords::getCategory, Collectors.counting()));
         List<DeadLinkDomain> todayDomainList = jdbc.selectDeadLinkDomain(DateUtils.format(current, DateUtils.FORMATTER_DATE_WITHOUT_SYMBOL));
         List<DeadLinkDomain> yesterdayDomainList = jdbc.selectDeadLinkDomain(DateUtils.format(DateUtils.minusDays(current, 1), DateUtils.FORMATTER_DATE_WITHOUT_SYMBOL));
         StackedChart yesterdayDomain = new StackedChart();
@@ -140,7 +148,7 @@ public class WebDataImpl {
             }
             StackedChart domain = new StackedChart();
             domain.setName(date);
-            domain.setCategory("Dead domains");
+            domain.setCategory("Broken Domains");
             if (temp != null) {
                 domain.setCount(temp.getDomainDead());
             } else {
@@ -150,7 +158,7 @@ public class WebDataImpl {
 
             StackedChart record = new StackedChart();
             record.setName(date);
-            record.setCategory("Dead links");
+            record.setCategory("Broken Links");
             if (temp != null) {
                 record.setCount(temp.getEventsDead() + temp.getMaterialsDead() + temp.getElearningDead() + temp.getWorkflowsDead());
             } else {
@@ -163,7 +171,20 @@ public class WebDataImpl {
         return result;
     }
 
+    public String getCodeJson() {
+        StringBuilder sb = new StringBuilder("{\"data\":[\"All\"");
+        List<Integer> codeList = currentData.stream().map(DeadLinkRecords::getStatusCode).distinct().sorted(Comparator.reverseOrder()).collect(Collectors.toList());
+        if (CollectionUtils.isNotEmpty(codeList)) {
+            for (int i = 0; i < codeList.size(); i++) {
+                if (codeList.get(i) != 1) {
+                    sb.append(",\"").append(codeList.get(i)).append("\"");
+                }
+            }
+        }
+        sb.append("]}");
 
+        return sb.toString();
+    }
 
     private List<String> get7DayList() {
         List<String> dateList = new ArrayList<>();

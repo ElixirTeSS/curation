@@ -1,5 +1,6 @@
 import org.junit.Test;
 import yanan.zhang.web.WebDataImpl;
+import yanan.zhang.web.model.Overview;
 import yanan.zhang.web.model.PieChartInfo;
 import yanan.zhang.web.model.StackedChartInfo;
 
@@ -8,7 +9,13 @@ import yanan.zhang.web.model.StackedChartInfo;
  **/
 public class WebDataTest {
 
-    private WebDataImpl web = new WebDataImpl();
+    private final WebDataImpl web = new WebDataImpl();
+
+    @Test
+    public void getOverviewTest() {
+        Overview overview = web.getOverview();
+        System.out.println(overview);
+    }
 
     @Test
     public void getPieChartTest() {

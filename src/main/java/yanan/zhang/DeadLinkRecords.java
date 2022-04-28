@@ -11,72 +11,72 @@ import java.util.Date;
 public class DeadLinkRecords {
 
     /**
-     * 主键
+     * ID
      */
     private Long id;
 
     /**
-     * 种类: events, materials, elearning
+     * categories: events, materials, elearning
      */
     private String category;
 
     /**
-     * 页数
+     * page number
      */
     private Integer page;
 
     /**
-     * http状态码
+     * http status code
      */
     private Integer statusCode;
 
     /**
-     * 状态码短语
+     * http reason phrase
      */
     private String reasonPhrase;
 
     /**
-     * 类型: major, minor
+     * type: major, minor
      */
     private String type;
 
     /**
-     * 死链url
+     * url of the broken link
      */
     private String deadLink;
 
     /**
-     * 死链标题
+     * title of the broken link
      */
     private String deadLinkTitle;
 
     /**
-     * 父级url
+     * parent url
      */
     private String parentUrl;
 
     /**
-     * 死链主域名
+     * broken domain URL
      */
     private String domainUrl;
 
     /**
-     * 起始时间
+     * starting time
      */
     private String start;
 
     /**
-     * 结束时间
+     * ending time
      */
     private String end;
 
     /**
-     * 周期(天)
+     * period (day)
      */
     private String duration;
 
     /**
-     * 添加时间
+     * create time
      */
     private Date createTime;
 

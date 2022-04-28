@@ -56,14 +56,14 @@ public class HttpUtils {
         try {
             HttpGet httpGet = new HttpGet(url);
             httpGet.setConfig(CONFIG);
-            //客户端执行httpGet方法，返回响应
+            //httpGet => get response
             httpResponse = httpClient.execute(httpGet);
 
             logger.info("httpStatus={},url={}", httpResponse.getStatusLine(), url);
 
             result.setHttpStatus(httpResponse.getStatusLine().getStatusCode());
             result.setReasonPhrase(httpResponse.getStatusLine().getReasonPhrase());
-            //得到服务响应状态码
+            //get the response
             if (httpResponse.getStatusLine().getStatusCode() == 200) {
                 result.setHttpContent(EntityUtils.toString(httpResponse.getEntity(), "gbk"));
                 result.setSuccess(true);
@@ -78,7 +78,6 @@ public class HttpUtils {
         } catch (Exception e) {
             result.setSuccess(false);
             result.setReasonPhrase(e.getMessage());
-//            logger.error("httpInvoke!url={}", url, e);
             logger.error("httpInvoke!url={}", url);
         } finally {
             if (httpResponse != null) {

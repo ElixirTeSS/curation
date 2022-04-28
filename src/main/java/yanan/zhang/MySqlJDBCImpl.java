@@ -26,23 +26,22 @@ public class MySqlJDBCImpl {
     private static final SimpleDateFormat SDF = new SimpleDateFormat("yyyyMMdd");
 
     /**
-     * 获取数据库连接
+     * get connection from database
      *
      * @return
      */
     private Connection getConnection() {
         try {
-            // 1.通过DriverManger注册驱动，注意此时Driver是在com.mysql.jdbc包中
+            // 1.register the Driver, here the Driver is in com.mysql.jdbc package
             DriverManager.registerDriver(new Driver());
             /**
-             * 2.通过DriverManager获取连接对象
+             * 2.get connection from DriverManager
              *
-             * jdbc:mysql://：这是固定的写法，表示使用jdbc连接mysql数据库
-             * localhost：ip地址，本地可以写成localhost。
-             * 3306：mysql的端口号。
-             * xia：数据库的名字。
-             * 第一个root：mysql的用户名
-             * 第二个root：mysql的密码。
+             * jdbc:mysql://：use jdbc to connect mysql DB
+             * localhost：ip: localhost。
+             * 3306
+             * 1st root：mysql username
+             * 2nd root：mysql password
              */
             return DriverManager.getConnection(DB_URL, USER_NAME, PASSWORD);
         } catch (SQLException e) {
@@ -52,7 +51,7 @@ public class MySqlJDBCImpl {
     }
 
     /**
-     * 删表
+     * delete table
      *
      * @return
      */
@@ -60,16 +59,16 @@ public class MySqlJDBCImpl {
         String dateStr = SDF.format(new Date());
         String sql = "DROP TABLE IF EXISTS dead_link_records_" + dateStr + ";";
         try {
-            //1，得到Connection对象，
+            //1，get Connection
             Connection connection = this.getConnection();
-            //2，通过Connection获取一个操作sql语句的对象Statement
+            //2，get the statement for precessing sql through Connection
             if (connection == null) {
                 return false;
             }
             Statement statement = connection.createStatement();
-            //3，执行删表语句
+            //3，execute the deleting
             statement.execute(sql);
-            //4，释放资源
+            //4，release
             statement.close();
             connection.close();
             return true;
@@ -80,7 +79,7 @@ public class MySqlJDBCImpl {
     }
 
     /**
-     * 建表
+     * create table
      *
      * @return
      */
@@ -95,7 +94,7 @@ public class MySqlJDBCImpl {
                 "    `reason_phrase` varchar(255) COMMENT 'http reason phrase',\n" +
                 "    `type`        varchar(20)  NOT NULL COMMENT 'type: major, minor',\n" +
                 "    `dead_link`   varchar(500) NOT NULL COMMENT 'dead link',\n" +
-                "    `dead_link_title` varchar(500) COMMENT '死链标题',\n" +
+                "    `dead_link_title` varchar(500) COMMENT 'title',\n" +
                 "    `parent_url`  varchar(500) NOT NULL COMMENT 'parent url',\n" +
                 "    `domain_url`  varchar(200) COMMENT 'dead link domain',\n" +
                 "    `start`       varchar(100) COMMENT 'start time',\n" +
@@ -107,16 +106,12 @@ public class MySqlJDBCImpl {
                 "    KEY `idx_create_time` (`create_time`) USING BTREE\n" +
                 ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='dead link table';\n";
         try {
-            //1，得到Connection对象，
             Connection connection = this.getConnection();
-            //2，通过Connection获取一个操作sql语句的对象Statement
             if (connection == null) {
                 return false;
             }
             Statement statement = connection.createStatement();
-            //3，执行建表语句
             statement.execute(sql);
-            //4，释放资源
             statement.close();
             connection.close();
             return true;
@@ -127,19 +122,16 @@ public class MySqlJDBCImpl {
     }
 
     /**
-     * 保存死链数据
+     * save broken links
      */
     public boolean saveDeadLinkRecord(DeadLinkRecords model) {
         String dateStr = SDF.format(new Date());
         try {
-            //1，得到Connection对象，
             Connection connection = this.getConnection();
-            //2，通过Connection获取一个操作sql语句的对象Statement
             if (connection == null) {
                 return false;
             }
             Statement statement = connection.createStatement();
-            //3，获取需要传递的参数
             String category = model.getCategory();
             Integer page = model.getPage();
             Integer statusCode = model.getStatusCode();
@@ -152,11 +144,8 @@ public class MySqlJDBCImpl {
             String start = model.getStart();
             String end = model.getEnd();
             String duration = model.getDuration();
-            //4，写sql语句，参数使用？占位符
             String sql = "INSERT INTO dead_link_records_" + dateStr + "(category, page, status_code, reason_phrase, type, dead_link, dead_link_title, parent_url, domain_url, start, end, duration) VALUE (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-            //5，得到PreparedStatement对象
             PreparedStatement preparedStatement = connection.prepareStatement(sql);
-            //6，通过PreparedStatement对象设置参数
             preparedStatement.setString(1, category);
             preparedStatement.setInt(2, page);
             preparedStatement.setInt(3, statusCode);
@@ -169,9 +158,7 @@ public class MySqlJDBCImpl {
             preparedStatement.setString(10, start);
             preparedStatement.setString(11, end);
             preparedStatement.setString(12, duration);
-            //7，执行sql语句
             preparedStatement.execute();
-            //8，释放资源
             preparedStatement.close();
             statement.close();
             connection.close();
@@ -183,27 +170,21 @@ public class MySqlJDBCImpl {
     }
 
     /**
-     * 根据类别查询死链数据
+     * select broken links by categories
      *
      * @param category
      * @return
      */
-    public List<DeadLinkRecords> selectDeadLinkRecordsByCategory(String category) {
+    public List<DeadLinkRecords> selectDeadLinkRecordsByCategory(String dateStr, String category) {
         List<DeadLinkRecords> list = new ArrayList<>();
-        String dateStr = SDF.format(new Date());
         try {
-            //1，得到Connection对象，
             Connection connection = this.getConnection();
-            //2，通过Connection获取一个操作sql语句的对象Statement
             if (connection == null) {
                 return list;
             }
             Statement statement = connection.createStatement();
-            //3，写sql语句
             String sql = "SELECT * FROM dead_link_records_" + dateStr + " WHERE category = '" + category + "'";
-            //4，查询，返回的结果放入ResultSet对象中。
             ResultSet resultSet = statement.executeQuery(sql);
-            //5，得到返回的值
             while (resultSet.next()) {
                 DeadLinkRecords model = new DeadLinkRecords();
                 model.setId(resultSet.getLong(1));
@@ -234,25 +215,20 @@ public class MySqlJDBCImpl {
     }
 
     /**
-     * 查询所有死链数据
+     * select all broken links
      *
      * @return
      */
     public List<DeadLinkRecords> selectDeadLinkRecords(String dateStr) {
         List<DeadLinkRecords> list = new ArrayList<>();
         try {
-            //1，得到Connection对象，
             Connection connection = this.getConnection();
-            //2，通过Connection获取一个操作sql语句的对象Statement
             if (connection == null) {
                 return list;
             }
             Statement statement = connection.createStatement();
-            //3，写sql语句
             String sql = "SELECT * FROM dead_link_records_" + dateStr;
-            //4，查询，返回的结果放入ResultSet对象中。
             ResultSet resultSet = statement.executeQuery(sql);
-            //5，得到返回的值
             while (resultSet.next()) {
                 DeadLinkRecords model = new DeadLinkRecords();
                 model.setId(resultSet.getLong(1));
@@ -271,7 +247,6 @@ public class MySqlJDBCImpl {
                 model.setCreateTime(resultSet.getTimestamp(14));
                 list.add(model);
             }
-            //6，释放资源
             resultSet.close();
             statement.close();
             connection.close();
@@ -283,7 +258,7 @@ public class MySqlJDBCImpl {
     }
 
     /**
-     * 根据主域名统计死链数据条数
+     * calculate the amount of the broken links for each broken domain
      *
      * @param domainUrl
      * @return
@@ -292,22 +267,16 @@ public class MySqlJDBCImpl {
         int count = 0;
         String dateStr = SDF.format(new Date());
         try {
-            //1，得到Connection对象，
             Connection connection = this.getConnection();
-            //2，通过Connection获取一个操作sql语句的对象Statement
             if (connection == null) {
                 return 0;
             }
             Statement statement = connection.createStatement();
-            //3，写sql语句，参数使用？占位符
             String sql = "SELECT count(*) FROM dead_link_records_" + dateStr + " WHERE domain_url = '" + domainUrl + "'";
-            //4，查询，返回的结果放入ResultSet对象中。
             ResultSet resultSet = statement.executeQuery(sql);
-            //5，得到返回的值
             while (resultSet.next()) {
                 count = resultSet.getInt(1);
             }
-            //6，释放资源
             resultSet.close();
             statement.close();
             connection.close();
@@ -319,7 +288,38 @@ public class MySqlJDBCImpl {
     }
 
     /**
-     * 删除死链记录
+     * calculate the amount of the broken links for each category (exclude black list)
+     *
+     * @param category
+     * @return
+     */
+    public int countDeadLinkRecordsByCategory(String category) {
+        int count = 0;
+        String dateStr = SDF.format(new Date());
+        try {
+            Connection connection = this.getConnection();
+            if (connection == null) {
+                return 0;
+            }
+            Statement statement = connection.createStatement();
+            //parameter ? (space)
+            String sql = "SELECT count(*) FROM dead_link_records_" + dateStr + " WHERE status_code != 1 AND category = '" + category + "'";
+            ResultSet resultSet = statement.executeQuery(sql);
+            while (resultSet.next()) {
+                count = resultSet.getInt(1);
+            }
+            resultSet.close();
+            statement.close();
+            connection.close();
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+
+        return count;
+    }
+
+    /**
+     * delete broken link record
      *
      * @param id
      * @return
@@ -327,18 +327,13 @@ public class MySqlJDBCImpl {
     public boolean deleteDeadLinkRecord(long id) {
         String dateStr = SDF.format(new Date());
         try {
-            //1，得到Connection对象，
             Connection connection = this.getConnection();
             if (connection == null) {
                 return false;
             }
-            //2，通过Connection获取一个操作sql语句的对象Statement
             Statement statement = connection.createStatement();
-            //3，拼接sql语句
             String sql = "DELETE FROM dead_link_records_" + dateStr + " WHERE id = " + id;
-            //4，执行sql语句
             statement.execute(sql);
-            //5，释放资源
             statement.close();
             connection.close();
             return true;
@@ -349,7 +344,7 @@ public class MySqlJDBCImpl {
     }
 
     /**
-     * 建表
+     * create broken domain table
      *
      * @return
      */
@@ -370,16 +365,12 @@ public class MySqlJDBCImpl {
                 "    KEY `idx_create_time` (`create_time`) USING BTREE\n" +
                 ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='dead link domain';";
         try {
-            //1，得到Connection对象，
             Connection connection = this.getConnection();
-            //2，通过Connection获取一个操作sql语句的对象Statement
             if (connection == null) {
                 return false;
             }
             Statement statement = connection.createStatement();
-            //3，执行建表语句
             statement.execute(sql);
-            //4，释放资源
             statement.close();
             connection.close();
             return true;
@@ -390,7 +381,7 @@ public class MySqlJDBCImpl {
     }
 
     /**
-     * 删表
+     * delete the broken domain table
      *
      * @return
      */
@@ -398,16 +389,12 @@ public class MySqlJDBCImpl {
         String dateStr = SDF.format(new Date());
         String sql = "DROP TABLE IF EXISTS dead_link_domain_" + dateStr + ";";
         try {
-            //1，得到Connection对象，
             Connection connection = this.getConnection();
-            //2，通过Connection获取一个操作sql语句的对象Statement
             if (connection == null) {
                 return false;
             }
             Statement statement = connection.createStatement();
-            //3，执行删表语句
             statement.execute(sql);
-            //4，释放资源
             statement.close();
             connection.close();
             return true;
@@ -418,19 +405,16 @@ public class MySqlJDBCImpl {
     }
 
     /**
-     * 保存死链数据
+     * save broken links
      */
     public boolean saveDeadLinkDomain(DeadLinkDomain model) {
         String dateStr = SDF.format(new Date());
         try {
-            //1，得到Connection对象，
             Connection connection = this.getConnection();
-            //2，通过Connection获取一个操作sql语句的对象Statement
             if (connection == null) {
                 return false;
             }
             Statement statement = connection.createStatement();
-            //3，获取需要传递的参数
             Integer statusCode = model.getStatusCode();
             String reasonPhrase = model.getReasonPhrase();
             String domainUrl = model.getDomainUrl();
@@ -438,11 +422,8 @@ public class MySqlJDBCImpl {
             Integer page = model.getPage();
             String detailLink = model.getDetailLink();
             String deadLinkTitle = model.getDeadLinkTitle();
-            //4，写sql语句，参数使用？占位符
             String sql = "INSERT INTO dead_link_domain_" + dateStr + "(status_code, reason_phrase, domain_url, link_number, page, detail_link, dead_link_title) VALUE (?, ?, ?, ?, ?, ?, ?)";
-            //5，得到PreparedStatement对象
             PreparedStatement preparedStatement = connection.prepareStatement(sql);
-            //6，通过PreparedStatement对象设置参数
             preparedStatement.setInt(1, statusCode);
             preparedStatement.setString(2, reasonPhrase);
             preparedStatement.setString(3, domainUrl);
@@ -450,9 +431,7 @@ public class MySqlJDBCImpl {
             preparedStatement.setInt(5, page);
             preparedStatement.setString(6, detailLink);
             preparedStatement.setString(7, deadLinkTitle);
-            //7，执行sql语句
             preparedStatement.execute();
-            //8，释放资源
             preparedStatement.close();
             statement.close();
             connection.close();
@@ -464,25 +443,20 @@ public class MySqlJDBCImpl {
     }
 
     /**
-     * 查询主域名数据
+     * select broken domain
      *
      * @return
      */
     public List<DeadLinkDomain> selectDeadLinkDomain(String dateStr) {
         List<DeadLinkDomain> list = new ArrayList<>();
         try {
-            //1，得到Connection对象，
             Connection connection = this.getConnection();
-            //2，通过Connection获取一个操作sql语句的对象Statement
             if (connection == null) {
                 return list;
             }
             Statement statement = connection.createStatement();
-            //3，写sql语句
             String sql = "SELECT * FROM dead_link_domain_" + dateStr;
-            //4，查询，返回的结果放入ResultSet对象中。
             ResultSet resultSet = statement.executeQuery(sql);
-            //5，得到返回的值
             while (resultSet.next()) {
                 DeadLinkDomain model = new DeadLinkDomain();
                 model.setId(resultSet.getLong(1));
@@ -496,7 +470,6 @@ public class MySqlJDBCImpl {
                 model.setCreateTime(resultSet.getTimestamp(9));
                 list.add(model);
             }
-            //6，释放资源
             resultSet.close();
             statement.close();
             connection.close();
@@ -508,25 +481,20 @@ public class MySqlJDBCImpl {
     }
 
     /**
-     * 查询主域名黑名单数据
+     * select domain from black list
      *
      * @return
      */
     public List<BlackListDomain> selectBlackListDomain() {
         List<BlackListDomain> list = new ArrayList<>();
         try {
-            //1，得到Connection对象，
             Connection connection = this.getConnection();
-            //2，通过Connection获取一个操作sql语句的对象Statement
             if (connection == null) {
                 return list;
             }
             Statement statement = connection.createStatement();
-            //3，写sql语句
             String sql = "SELECT * FROM black_list_domain";
-            //4，查询，返回的结果放入ResultSet对象中。
             ResultSet resultSet = statement.executeQuery(sql);
-            //5，得到返回的值
             while (resultSet.next()) {
                 BlackListDomain model = new BlackListDomain();
                 model.setId(resultSet.getLong(1));
@@ -534,7 +502,6 @@ public class MySqlJDBCImpl {
                 model.setCreateTime(resultSet.getTimestamp(3));
                 list.add(model);
             }
-            //6，释放资源
             resultSet.close();
             statement.close();
             connection.close();
@@ -546,18 +513,48 @@ public class MySqlJDBCImpl {
     }
 
     /**
-     * 保存死链数据
+     * select domain from the white list
+     *
+     * @return
+     */
+    public List<WhiteListDomain> selectWhiteListDomain() {
+        List<WhiteListDomain> list = new ArrayList<>();
+        try {
+            Connection connection = this.getConnection();
+            if (connection == null) {
+                return list;
+            }
+            Statement statement = connection.createStatement();
+            String sql = "SELECT * FROM white_list_domain";
+            ResultSet resultSet = statement.executeQuery(sql);
+            while (resultSet.next()) {
+                WhiteListDomain model = new WhiteListDomain();
+                model.setId(resultSet.getLong(1));
+                model.setDomainUrl(resultSet.getString(2));
+                model.setCreateTime(resultSet.getTimestamp(3));
+                list.add(model);
+            }
+            resultSet.close();
+            statement.close();
+            connection.close();
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+
+        return list;
+    }
+
+    /**
+     * save data of broken link
      */
     public boolean saveCollectInfo(CollectInfo model) {
         try {
-            //1，得到Connection对象，
             Connection connection = this.getConnection();
-            //2，通过Connection获取一个操作sql语句的对象Statement
             if (connection == null) {
                 return false;
             }
             Statement statement = connection.createStatement();
-            //3，获取需要传递的参数
+            //get the parameters
             int events = model.getEvents();
             int eventsDead = model.getEventsDead();
             int materials = model.getMaterials();
@@ -568,11 +565,9 @@ public class MySqlJDBCImpl {
             int workflowsDead = model.getWorkflowsDead();
             int domainDead = model.getDomainDead();
             String createDate = model.getCreateDate();
-            //4，写sql语句，参数使用？占位符
+            //use parameter ? (space)
             String sql = "INSERT INTO collect_info(events, events_dead, materials, materials_dead, elearning, elearning_dead, workflows, workflows_dead, domain_dead, create_date) VALUE (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-            //5，得到PreparedStatement对象
             PreparedStatement preparedStatement = connection.prepareStatement(sql);
-            //6，通过PreparedStatement对象设置参数
             preparedStatement.setInt(1, events);
             preparedStatement.setInt(2, eventsDead);
             preparedStatement.setInt(3, materials);
@@ -583,9 +578,7 @@ public class MySqlJDBCImpl {
             preparedStatement.setInt(8, workflowsDead);
             preparedStatement.setInt(9, domainDead);
             preparedStatement.setString(10, createDate);
-            //7，执行sql语句
             preparedStatement.execute();
-            //8，释放资源
             preparedStatement.close();
             statement.close();
             connection.close();
@@ -597,20 +590,17 @@ public class MySqlJDBCImpl {
     }
 
     /**
-     * 查询汇总数据
+     * select collected data by Date
      *
      * @return
      */
     public List<CollectInfo> selectCollectInfoByDate(List<String> dateList) {
         List<CollectInfo> list = new ArrayList<>();
         try {
-            //1，得到Connection对象，
             Connection connection = this.getConnection();
-            //2，通过Connection获取一个操作sql语句的对象Statement
             if (connection == null) {
                 return list;
             }
-            //3，写sql语句
             StringBuilder sql = new StringBuilder();
             sql.append("SELECT * FROM collect_info WHERE create_date IN (");
             for (int i = 0; i < dateList.size(); i++) {
@@ -624,9 +614,7 @@ public class MySqlJDBCImpl {
             for (int i = 0; i<dateList.size(); i++) {
                 preparedStatement.setString(i + 1, dateList.get(i));
             }
-            //4，查询，返回的结果放入ResultSet对象中。
             ResultSet resultSet = preparedStatement.executeQuery();
-            //5，得到返回的值
             while (resultSet.next()) {
                 CollectInfo model = new CollectInfo();
                 model.setId(resultSet.getLong(1));
@@ -642,7 +630,6 @@ public class MySqlJDBCImpl {
                 model.setCreateDate(resultSet.getString(11));
                 list.add(model);
             }
-            //6，释放资源
             resultSet.close();
             preparedStatement.close();
             connection.close();
@@ -651,6 +638,30 @@ public class MySqlJDBCImpl {
         }
 
         return list;
+    }
+
+    /**
+     * delete the collected data
+     *
+     * @param date
+     * @return
+     */
+    public boolean deleteCollectInfo(String date) {
+        try {
+            Connection connection = this.getConnection();
+            if (connection == null) {
+                return false;
+            }
+            Statement statement = connection.createStatement();
+            String sql = "DELETE FROM collect_info WHERE create_date = '" + date + "'";
+            statement.execute(sql);
+            statement.close();
+            connection.close();
+            return true;
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return false;
+        }
     }
 
 }

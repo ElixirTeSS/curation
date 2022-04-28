@@ -24,13 +24,14 @@ public class MySqlJDBCTest {
         jdbc.dropTable();
         jdbc.createTable();
         DeadLinkRecords model = new DeadLinkRecords();
-        model.setCategory("1");
+        model.setCategory("test cat");
         model.setPage(1);
+        model.setType("test type");
         model.setDeadLink("abc");
         model.setStatusCode(200);
         model.setReasonPhrase("OK");
-        model.setParentUrl("ddd");
-        model.setDomainUrl("domain");
+        model.setParentUrl("test OK");
+        model.setDomainUrl("test domain");
         jdbc.saveDeadLinkRecord(model);
     }
 
@@ -57,6 +58,11 @@ public class MySqlJDBCTest {
         collectInfo.setDomainDead(10);
         collectInfo.setCreateDate("2022-03-13");
         jdbc.saveCollectInfo(collectInfo);
+    }
+
+    @Test
+    public void deleteCollectInfoTest() {
+        jdbc.deleteCollectInfo(DateUtils.format(new Date(), DateUtils.FORMATTER_DATE));
     }
 
 }

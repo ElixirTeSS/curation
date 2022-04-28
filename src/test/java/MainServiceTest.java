@@ -16,21 +16,13 @@ public class MainServiceTest {
     public void testGetFromList() {
 
         List<SingleUrlResult> list = mainService.getEventsList(1);
-//		List<SingleUrlResult> list = mainService.getWorkflowsList();
-//		System.out.println(list==null);
-
-//		if (list!=null) {
-//			for (SingleUrlResult result:list) {
-//				System.out.println(result);
-//			}
-//		}
 
     }
 
     @Test
     public void testRefillDetail() {
 
-        List<SingleUrlResult> list = mainService.getEventsList(415);
+        List<SingleUrlResult> list = mainService.getEventsList(1);
 
         SingleUrlResult result = list.get(0);
 

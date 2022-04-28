@@ -15,41 +15,41 @@ import java.util.List;
 public class SingleUrlResult {
 
     /**
-     * 这条记录所在的list页面的索引
+     * page number
      */
     private int listIndex;
     /**
-     * 这条记录在list页面上的title
+     * title of the detail page
      */
     private String listTitle;
     /**
-     * detail页面的url
+     * detail page url
      */
     private String detailUrl;
     /**
-     * 访问detail页面的时候的httpStatus
+     * httpStatus of the detail page
      */
     private int detailHttpStatus;
     /**
-     * detail页面上的目标连接title
+     * target title
      */
     private String detailTargetTitle;
     /**
-     * detail页面上的目标连接url
+     * target URL
      */
     private String detailTargetUrl;
     /**
-     * detail页面上的目标连接url的httpStatus
+     * httpStatus of the target URL
      */
     private int detailTargetStatus;
 
     /**
-     * detail页面上的目标连接url的httpReasonPhrase
+     * httpReasonPhrase of the target URL
      */
     private String detailTargetReasonPhrase;
 
     /**
-     * 种类: events, materials, elearning
+     * Categories: events, materials, elearning
      */
     private String category;
 
@@ -59,17 +59,17 @@ public class SingleUrlResult {
     private List<SingleUrlResult> minorList;
 
     /**
-     * 起始时间
+     * Starting time
      */
     private String start;
 
     /**
-     * 结束时间
+     * Ending time
      */
     private String end;
 
     /**
-     * 周期(天)
+     * Period
      */
     private String duration;
 }

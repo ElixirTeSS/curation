@@ -1,6 +1,7 @@
 package yanan.zhang;
 
 import com.alibaba.fastjson.JSON;
+import org.apache.commons.collections4.CollectionUtils;
 import org.apache.poi.hssf.usermodel.HSSFRow;
 import org.apache.poi.hssf.usermodel.HSSFSheet;
 import org.apache.poi.hssf.usermodel.HSSFWorkbook;
@@ -25,7 +26,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.stream.Collectors;
 
-
 /**
  * @author Yanan Zhang
  **/
@@ -39,7 +39,7 @@ public class PoiExportImpl {
     public void exportExcel() throws IOException {
         SimpleDateFormat sdf = new SimpleDateFormat("yyyyMMdd");
         String dateStr = sdf.format(new Date());
-        // 获取桌面路径
+        // get the path
         FileSystemView fsv = FileSystemView.getFileSystemView();
         String desktop = fsv.getHomeDirectory().getPath();
         String filePath = desktop + "/Result" + dateStr + ".xls";
@@ -53,6 +53,8 @@ public class PoiExportImpl {
         this.createCategorySheet(workbook, CategoryEnum.E_LEARNING);
         this.createCategorySheet(workbook, CategoryEnum.WORKFLOWS);
         this.createWebDataSheet(workbook);
+        this.createBlackListSheet(workbook);
+        this.createWhiteListSheet(workbook);
 
         workbook.setActiveSheet(0);
         workbook.write(outputStream);
@@ -60,7 +62,7 @@ public class PoiExportImpl {
     }
 
     /**
-     * 添加主域名Sheet
+     * Broken domain Sheet
      *
      * @param workbook
      */
@@ -77,10 +79,11 @@ public class PoiExportImpl {
         header.createCell(5).setCellValue("detail link");
         header.createCell(6).setCellValue("dead link title");
         header.createCell(7).setCellValue("Detection time");
-        // 设置行的高度
+        header.createCell(8).setCellValue("Color");
+        // set the height
         header.setHeightInPoints(30);
 
-        // 设置列的宽度
+        // set the width
         sheet.setColumnWidth(0, 20 * 512);
         sheet.setColumnWidth(1, 20 * 256);
         sheet.setColumnWidth(2, 20 * 256);
@@ -89,14 +92,25 @@ public class PoiExportImpl {
         sheet.setColumnWidth(5, 20 * 256);
         sheet.setColumnWidth(6, 20 * 256);
         sheet.setColumnWidth(7, 20 * 256);
+        sheet.setColumnWidth(8, 20 * 128);
 
         SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
-        // 拿到主域名数据
-        List<DeadLinkDomain> domainList = jdbc.selectDeadLinkDomain(DateUtils.format(new Date(), DateUtils.FORMATTER_DATE_WITHOUT_SYMBOL));
-        if (domainList != null && domainList.size() > 0) {
-            // 排序
-            domainList = domainList.stream().sorted(Comparator.comparing(DeadLinkDomain::getStatusCode).reversed()).collect(Collectors.toList());
-            for (DeadLinkDomain domain : domainList) {
+        // get broken domain data
+        List<DeadLinkDomain> todayList = jdbc.selectDeadLinkDomain(DateUtils.format(new Date(), DateUtils.FORMATTER_DATE_WITHOUT_SYMBOL));
+        List<DeadLinkDomain> yesterdayList = jdbc.selectDeadLinkDomain(DateUtils.format(DateUtils.minusDays(new Date(), 1), DateUtils.FORMATTER_DATE_WITHOUT_SYMBOL));
+        CollectionDiffResult<DeadLinkDomain> diffResult = CollectionDiffUtils.diff(yesterdayList, todayList, DeadLinkDomain::getDomainUrl);
+        List<String> insertList = null;
+        if (CollectionUtils.isNotEmpty(diffResult.getInsertList())) {
+            insertList = diffResult.getInsertList().stream().map(DeadLinkDomain::getDomainUrl).collect(Collectors.toList());
+        }
+        List<String> deleteList = null;
+        if (CollectionUtils.isNotEmpty(diffResult.getDeleteList())) {
+            deleteList = diffResult.getDeleteList().stream().map(DeadLinkDomain::getDomainUrl).collect(Collectors.toList());
+        }
+        if (todayList != null && todayList.size() > 0) {
+            // sorting
+            todayList = todayList.stream().sorted(Comparator.comparing(DeadLinkDomain::getLinkNumber).reversed()).collect(Collectors.toList());
+            for (DeadLinkDomain domain : todayList) {
                 HSSFRow row = sheet.createRow(rowNum);
                 rowNum++;
                 row.createCell(0).setCellValue(domain.getDomainUrl());
@@ -107,12 +121,22 @@ public class PoiExportImpl {
                 row.createCell(5).setCellValue(domain.getDetailLink());
                 row.createCell(6).setCellValue(domain.getDeadLinkTitle());
                 row.createCell(7).setCellValue(sdf.format(domain.getCreateTime()));
+                if (CollectionUtils.isNotEmpty(insertList) && insertList.contains(domain.getDomainUrl())) {
+                    // yesterday has but today does not have - red
+                    row.createCell(8).setCellValue("red");
+                } else if (CollectionUtils.isNotEmpty(deleteList) && deleteList.contains(domain.getDomainUrl())) {
+                    // yesterday does not have but today has - green
+                    row.createCell(8).setCellValue("green");
+                } else {
+                    // both have - white
+                    row.createCell(8).setCellValue("white");
+                }
             }
         }
     }
 
     /**
-     * 添加各种类Sheet
+     * Each Categories Sheet
      *
      * @param workbook
      */
@@ -133,13 +157,14 @@ public class PoiExportImpl {
         header.createCell(9).setCellValue("End time");
         header.createCell(10).setCellValue("Duration(days)");
         header.createCell(11).setCellValue("Detection time");
+        header.createCell(12).setCellValue("Color");
         if (categoryEnum.equals(CategoryEnum.EVENTS)) {
-            header.createCell(12).setCellValue("Status");
+            header.createCell(13).setCellValue("Status");
         }
-        // 设置行的高度
+        // set the height
         header.setHeightInPoints(30);
 
-        // 设置列的宽度
+        // set the width
         sheet.setColumnWidth(0, 20 * 256);
         sheet.setColumnWidth(1, 20 * 256);
         sheet.setColumnWidth(2, 20 * 256);
@@ -152,17 +177,29 @@ public class PoiExportImpl {
         sheet.setColumnWidth(9, 20 * 256);
         sheet.setColumnWidth(10, 20 * 256);
         sheet.setColumnWidth(11, 20 * 256);
+        sheet.setColumnWidth(12, 20 * 128);
         if (categoryEnum.equals(CategoryEnum.EVENTS)) {
-            sheet.setColumnWidth(12, 20 * 128);
+            sheet.setColumnWidth(13, 20 * 128);
         }
 
         SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
-        // 拿到主域名数据
-        List<DeadLinkRecords> recordList = jdbc.selectDeadLinkRecordsByCategory(categoryEnum.getName());
-        if (recordList != null && recordList.size() > 0) {
-            // 排序
-            recordList = recordList.stream().sorted(Comparator.comparing(DeadLinkRecords::getStatusCode).reversed()).collect(Collectors.toList());
-            for (DeadLinkRecords record : recordList) {
+        // get data
+        List<DeadLinkRecords> todayList = jdbc.selectDeadLinkRecordsByCategory(DateUtils.format(new Date(), DateUtils.FORMATTER_DATE_WITHOUT_SYMBOL), categoryEnum.getName());
+        List<DeadLinkRecords> yesterdayList = jdbc.selectDeadLinkRecordsByCategory(DateUtils.format(DateUtils.minusDays(new Date(), 1), DateUtils.FORMATTER_DATE_WITHOUT_SYMBOL), categoryEnum.getName());
+        CollectionDiffResult<DeadLinkRecords> diffResult = CollectionDiffUtils.diff(yesterdayList, todayList,
+                x -> x.getCategory() + "|" + x.getType() + "|" + x.getDeadLink().trim() + "|" + x.getParentUrl().trim());
+        List<String> insertList = null;
+        if (CollectionUtils.isNotEmpty(diffResult.getInsertList())) {
+            insertList = diffResult.getInsertList().stream().map(DeadLinkRecords::getDeadLink).collect(Collectors.toList());
+        }
+        List<String> deleteList = null;
+        if (CollectionUtils.isNotEmpty(diffResult.getDeleteList())) {
+            deleteList = diffResult.getDeleteList().stream().map(DeadLinkRecords::getDeadLink).collect(Collectors.toList());
+        }
+        if (todayList != null && todayList.size() > 0) {
+            // sorting
+            todayList = todayList.stream().sorted(Comparator.comparing(DeadLinkRecords::getStatusCode).reversed()).collect(Collectors.toList());
+            for (DeadLinkRecords record : todayList) {
                 HSSFRow row = sheet.createRow(rowNum);
                 rowNum++;
                 row.createCell(0).setCellValue(record.getCategory());
@@ -173,6 +210,7 @@ public class PoiExportImpl {
                 row.createCell(5).setCellValue(record.getDeadLink());
                 row.createCell(6).setCellValue(record.getDeadLinkTitle());
                 row.createCell(7).setCellValue(record.getParentUrl());
+
                 if (record.getStart() != null) {
                     row.createCell(8).setCellValue(record.getStart());
                 } else {
@@ -188,16 +226,29 @@ public class PoiExportImpl {
                 } else {
                     row.createCell(10).setCellValue(0);
                 }
+
                 row.createCell(11).setCellValue(sdf.format(record.getCreateTime()));
+
+                if (CollectionUtils.isNotEmpty(insertList) && insertList.contains(record.getDeadLink())) {
+                    // yesterday has but today does not have - red
+                    row.createCell(12).setCellValue("red");
+                } else if (CollectionUtils.isNotEmpty(deleteList) && deleteList.contains(record.getDeadLink())) {
+                    // yesterday does not have but today has - green
+                    row.createCell(12).setCellValue("green");
+                } else {
+                    // both have - white
+                    row.createCell(12).setCellValue("white");
+                }
+
                 if (categoryEnum.equals(CategoryEnum.EVENTS)) {
                     try {
                         if (record.getDuration() == null || record.getDuration().trim().length() == 0) {
-                            row.createCell(12).setCellValue("undefined");
-                        } else if (record.getEnd() != null && DateUtils.dateInterval(simpleDateFormat.parse(record.getEnd()), new Date()) < 1) {
-                            // endDate早于今天就是past
-                            row.createCell(12).setCellValue("past");
+                            row.createCell(13).setCellValue("undefined");
+                        } else if (record.getEnd() != null && DateUtils.dateInterval(simpleDateFormat.parse(record.getEnd()), new Date()) > 0) {
+                            // endDate is earlier than current date - past
+                            row.createCell(13).setCellValue("past");
                         } else {
-                            row.createCell(12).setCellValue("current");
+                            row.createCell(13).setCellValue("current");
                         }
                     } catch (ParseException e) {
                         logger.error("parse end date error! record.getEnd={}", record.getEnd(), e);
@@ -205,6 +256,13 @@ public class PoiExportImpl {
                 }
             }
         }
+    }
+
+    public static void main(String[] args) throws ParseException {
+        SimpleDateFormat simpleDateFormat = new SimpleDateFormat("EEE, dd MMM yyyy '@' HH:mm", Locale.UK);
+        System.out.println(DateUtils.dateInterval(simpleDateFormat.parse("Friday, 18 January 2013 @ 00:00"), new Date()));
+        System.out.println(DateUtils.dateInterval(simpleDateFormat.parse("Thursday, 17 March 2022 @ 00:00"), new Date()));
+        System.out.println(DateUtils.dateInterval(simpleDateFormat.parse("Friday, 18 March 2022 @ 00:00"), new Date()));
     }
 
     private void createWebDataSheet(HSSFWorkbook workbook) {
@@ -217,35 +275,105 @@ public class PoiExportImpl {
         header.createCell(2).setCellValue("Detail");
         header.createCell(3).setCellValue("StackedChart");
         header.createCell(4).setCellValue("LineChart");
-        // 设置行的高度
+        header.createCell(5).setCellValue("CodeJson");
+        // set the height
         header.setHeightInPoints(30);
-        // 设置列的宽度
+        // set the width
         sheet.setColumnWidth(0, 20 * 512);
         sheet.setColumnWidth(1, 20 * 512);
         sheet.setColumnWidth(2, 20 * 512);
         sheet.setColumnWidth(3, 20 * 512);
         sheet.setColumnWidth(4, 20 * 512);
+        sheet.setColumnWidth(5, 20 * 512);
 
-        // 获取overview
+        // get overview data
         Overview overview = webData.getOverview();
         HSSFRow row = sheet.createRow(rowNum);
         row.createCell(0).setCellValue(JSON.toJSONString(overview));
 
-        // 获取饼图数据
+        // get data for pir chart
         PieChartInfo pieChart = webData.getPieChart();
         row.createCell(1).setCellValue(JSON.toJSONString(pieChart));
 
-        // 获取Detail
+        // get Detail data
         Detail detail = webData.getDetail();
         row.createCell(2).setCellValue(JSON.toJSONString(detail));
 
-        // 获取柱状图
+        // get data for stacked chart
         StackedChartInfo stackedChart = webData.getStackedChart();
         row.createCell(3).setCellValue(JSON.toJSONString(stackedChart));
 
-        // 获取折线图
+        // get data for line chart
         StackedChartInfo lineChart = webData.getLineChart();
         row.createCell(4).setCellValue(JSON.toJSONString(lineChart));
+
+        // get codeJson
+        String codeJson = webData.getCodeJson();
+        row.createCell(5).setCellValue(codeJson);
+    }
+
+    private void createBlackListSheet(HSSFWorkbook workbook) {
+        int rowNum = 0;
+        HSSFSheet sheet = workbook.createSheet("BlackList");
+        HSSFRow header = sheet.createRow(rowNum);
+        rowNum++;
+        header.createCell(0).setCellValue("Domain url");
+        header.createCell(1).setCellValue("Number of detected links");
+        header.createCell(2).setCellValue("Detection time");
+        // set the height
+        header.setHeightInPoints(30);
+
+        // set the width
+        sheet.setColumnWidth(0, 20 * 512);
+        sheet.setColumnWidth(1, 20 * 256);
+        sheet.setColumnWidth(2, 20 * 256);
+
+        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+        // get black list data
+        List<BlackListDomain> domainList = jdbc.selectBlackListDomain();
+        if (domainList != null && domainList.size() > 0) {
+            // sorting
+            for (BlackListDomain domain : domainList) {
+                HSSFRow row = sheet.createRow(rowNum);
+                rowNum++;
+                row.createCell(0).setCellValue(domain.getDomainUrl());
+                int count = jdbc.countDeadLinkRecordsByDomain(domain.getDomainUrl());
+                row.createCell(1).setCellValue(count);
+                row.createCell(2).setCellValue(sdf.format(domain.getCreateTime()));
+            }
+        }
+    }
+
+    private void createWhiteListSheet(HSSFWorkbook workbook) {
+        int rowNum = 0;
+        HSSFSheet sheet = workbook.createSheet("WhiteList");
+        HSSFRow header = sheet.createRow(rowNum);
+        rowNum++;
+        header.createCell(0).setCellValue("Domain url");
+        header.createCell(1).setCellValue("Number of detected links");
+        header.createCell(2).setCellValue("Detection time");
+        // set height
+        header.setHeightInPoints(30);
+
+        // set width
+        sheet.setColumnWidth(0, 20 * 512);
+        sheet.setColumnWidth(1, 20 * 256);
+        sheet.setColumnWidth(2, 20 * 256);
+
+        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+        // get white list data
+        List<WhiteListDomain> domainList = jdbc.selectWhiteListDomain();
+        if (domainList != null && domainList.size() > 0) {
+            // sorting
+            for (WhiteListDomain domain : domainList) {
+                HSSFRow row = sheet.createRow(rowNum);
+                rowNum++;
+                row.createCell(0).setCellValue(domain.getDomainUrl());
+                int count = jdbc.countDeadLinkRecordsByDomain(domain.getDomainUrl());
+                row.createCell(1).setCellValue(count);
+                row.createCell(2).setCellValue(sdf.format(domain.getCreateTime()));
+            }
+        }
     }
 
 }
